@@ -14,8 +14,9 @@ Allocator& allocator() {
 }
 
 void* Buffer::raw_ptr() {
-  if (!ptr_)
+  if (!ptr_) {
     return nullptr;
+  }
   return static_cast<cuda::CudaBuffer*>(ptr_)->data;
 }
 
@@ -35,16 +36,18 @@ Buffer CudaAllocator::malloc(size_t size, bool) {
 
 void CudaAllocator::free(Buffer buffer) {
   auto* buf = static_cast<CudaBuffer*>(buffer.ptr());
-  if (!buf)
+  if (!buf) {
     return;
+  }
   cudaFree(buf->data);
   delete buf;
 }
 
 size_t CudaAllocator::size(Buffer buffer) const {
   auto* buf = static_cast<CudaBuffer*>(buffer.ptr());
-  if (!buf)
+  if (!buf) {
     return 0;
+  }
   return static_cast<cuda::CudaBuffer*>(buffer.ptr())->size;
 }
 

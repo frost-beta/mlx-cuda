@@ -6,10 +6,10 @@
 
 namespace mlx::core {
 
-void check_cuda_error(cudaError_t err) {
+void check_cuda_error(const char* name, cudaError_t err) {
   if (err != cudaSuccess) {
     throw std::runtime_error(
-        fmt::format("cudaSetDevice failed: %s", cudaGetErrorString(err)));
+        fmt::format("%s failed: %s", name, cudaGetErrorString(err)));
   }
 }
 

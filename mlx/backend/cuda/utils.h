@@ -6,6 +6,8 @@
 
 namespace mlx::core {
 
-void check_cuda_error(cudaError_t err);
+#define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
+
+void check_cuda_error(const char* name, cudaError_t err);
 
 } // namespace mlx::core

@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/cuda/utils.h"
 #include "mlx/event.h"
+#include "mlx/backend/cuda/utils.h"
 #include "mlx/scheduler.h"
 
 #include <cuda/atomic>
@@ -9,15 +9,10 @@
 namespace mlx::core {
 
 Event::Event(Stream stream) : stream_(stream) {
-  // TODO: Move the check to initialization.
-  if (!cuda::atomic<uint64_t>::is_always_lock_free) {
-    throw std::runtime_error(
-        "Synchronization not supported for managed memory.");
-  }
   // Allocate cuda::atomic on managed memory.
   cuda::atomic<uint64_t>* ac;
-  check_cuda_error(cudaMallocManaged(&ac, sizeof(cuda::atomic<uint64_t>)));
-  new(ac) std::atomic<uint64_t>(0);
+  CHECK_CUDA_ERROR(cudaMallocManaged(&ac, sizeof(cuda::atomic<uint64_t>)));
+  new (ac) std::atomic<uint64_t>(0);
   // Store it in a shared_ptr.
   auto dtor = [](void* ptr) {
     static_cast<cuda::atomic<uint64_t>*>(ptr)->~atomic<uint64_t>();
@@ -41,11 +36,19 @@ void Event::signal() {
 }
 
 void Event::wait(Stream stream) {
-  scheduler::enqueue(stream, [*this]() mutable { wait(); });
+  if (stream.device == Device::cpu) {
+    scheduler::enqueue(stream, [*this]() mutable { wait(); });
+  } else {
+    throw std::runtime_error("Event::wait not implemented for GPU yet.");
+  }
 }
 
 void Event::signal(Stream stream) {
-  scheduler::enqueue(stream, [*this]() mutable { signal(); });
+  if (stream.device == Device::cpu) {
+    scheduler::enqueue(stream, [*this]() mutable { signal(); });
+  } else {
+    throw std::runtime_error("Event::signal not implemented for GPU yet.");
+  }
 }
 
 bool Event::is_signaled() const {
