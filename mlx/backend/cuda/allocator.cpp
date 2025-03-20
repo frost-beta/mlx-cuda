@@ -10,19 +10,19 @@ namespace mlx::core {
 namespace allocator {
 
 Allocator& allocator() {
-  return cuda::allocator();
+  return mxcuda::allocator();
 }
 
 void* Buffer::raw_ptr() {
   if (!ptr_) {
     return nullptr;
   }
-  return static_cast<cuda::CudaBuffer*>(ptr_)->data;
+  return static_cast<mxcuda::CudaBuffer*>(ptr_)->data;
 }
 
 } // namespace allocator
 
-namespace cuda {
+namespace mxcuda {
 
 Buffer CudaAllocator::malloc(size_t size, bool) {
   auto* buf = new CudaBuffer{nullptr, size};
@@ -48,7 +48,7 @@ size_t CudaAllocator::size(Buffer buffer) const {
   if (!buf) {
     return 0;
   }
-  return static_cast<cuda::CudaBuffer*>(buffer.ptr())->size;
+  return static_cast<CudaBuffer*>(buffer.ptr())->size;
 }
 
 CudaAllocator& allocator() {
@@ -59,6 +59,6 @@ CudaAllocator& allocator() {
   return *allocator_;
 }
 
-} // namespace cuda
+} // namespace mxcuda
 
 } // namespace mlx::core

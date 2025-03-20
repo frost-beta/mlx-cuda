@@ -84,6 +84,10 @@ if(MLX_BUILD_METAL)
   set(QUARTZ_LIB "-framework QuartzCore")
 endif()
 
+if(MLX_BUILD_CUDA)
+  enable_language(CUDA)
+endif()
+
 if(MLX_BUILD_METAL AND NOT METAL_LIB)
   message(STATUS "Metal not found. Unable to build GPU")
   set(MLX_BUILD_METAL OFF)

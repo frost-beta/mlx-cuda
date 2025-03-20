@@ -6,7 +6,7 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
 
-namespace mlx::core::cuda {
+namespace mlx::core::mxcuda {
 
 // We have to set current device before calling some APIs to make multi-device
 // work, including kernel launching.
@@ -26,6 +26,9 @@ class DeviceStream {
 
   // Returns a CUDA stream for launching kernels.
   cudaStream_t schedule_cuda_stream();
+
+  // Return the last stream used.
+  cudaStream_t last_cuda_stream();
 
  private:
   Device device_;
@@ -65,4 +68,4 @@ class CommandEncoder {
 
 CommandEncoder& get_command_encoder(Stream stream);
 
-} // namespace mlx::core::cuda
+} // namespace mlx::core::mxcuda

@@ -4,7 +4,7 @@
 
 #include "mlx/allocator.h"
 
-namespace mlx::core::cuda {
+namespace mlx::core::mxcuda {
 
 using allocator::Buffer;
 
@@ -27,4 +27,4 @@ class CudaAllocator : public allocator::Allocator {
 
 CudaAllocator& allocator();
 
-} // namespace mlx::core::cuda
+} // namespace mlx::core::mxcuda
