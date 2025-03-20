@@ -1,8 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/primitives.h"
 #include "mlx/distributed/primitives.h"
+#include "mlx/backend/metal/copy.h"
 #include "mlx/fast_primitives.h"
+#include "mlx/primitives.h"
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
@@ -27,6 +28,19 @@ void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
+}
+
+void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto in = inputs[0];
+  CopyType ctype;
+  if (in.data_size() == 1) {
+    ctype = CopyType::Scalar;
+  } else if (in.flags().contiguous) {
+    ctype = CopyType::Vector;
+  } else {
+    ctype = CopyType::General;
+  }
+  copy_gpu(in, out, ctype);
 }
 
 NO_GPU(Abs)
@@ -73,7 +87,6 @@ NO_GPU(Expm1)
 NO_GPU(FFT)
 NO_GPU(Flatten)
 NO_GPU(Floor)
-NO_GPU(Full)
 NO_GPU(Gather)
 NO_GPU(GatherAxis)
 NO_GPU(GatherMM)

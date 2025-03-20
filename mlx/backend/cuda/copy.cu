@@ -2,8 +2,9 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/dtype_utils.cuh"
+#include "mlx/backend/cuda/kernels/copy.cuh"
 #include "mlx/backend/metal/copy.h"
-#include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 #include <assert.h>
@@ -57,12 +58,25 @@ void copy_gpu_inplace(
   encoder.set_input_array(input);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(input.dtype(), "copy in", CTYPE_IN, [&]() {
-      MLX_SWITCH_ALL_TYPES(out.dtype(), "copy out", CTYPE_OUT, [&]() {
-        if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-          throw std::runtime_error(
-              "General copy not implemented for CUDA backend.");
+    MLX_SWITCH_CUDA_TYPES(input.dtype(), "copy in", CTYPE_IN, [&]() {
+      MLX_SWITCH_CUDA_TYPES(out.dtype(), "copy out", CTYPE_OUT, [&]() {
+        if constexpr (std::is_convertible_v<CTYPE_IN, CTYPE_OUT>) {
+          if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+            throw std::runtime_error(
+                "General copy not implemented for CUDA backend.");
+          } else {
+            if (ctype == CopyType::Scalar) {
+              mxcuda::copy_s<<<(out.data_size() + 256 - 1) / 256, 256, 0, stream>>>(
+                  input.data<CTYPE_IN>() + inp_offset,
+                  out.data<CTYPE_OUT>() + out_offset,
+                  out.data_size());
+            }
+          }
         } else {
+          throw std::runtime_error(fmt::format(
+              "Can not copy data from dtype %s to %s",
+              dtype_to_string(input.dtype()),
+              dtype_to_string(out.dtype())));
         }
       });
     });
