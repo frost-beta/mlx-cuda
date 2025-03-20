@@ -18,6 +18,9 @@ inline void set_cuda_device(Device device) {
   }
 }
 
+// Get the maxThreadsPerBlock property of device.
+size_t max_threads_per_block(Device device);
+
 // A stream in MLX consists of multiple CUDA stream.
 class DeviceStream {
  public:

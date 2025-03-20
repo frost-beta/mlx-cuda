@@ -11,6 +11,12 @@ namespace mlx::core {
 
 namespace mxcuda {
 
+size_t max_threads_per_block(Device device) {
+  cudaDeviceProp prop;
+  CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, device.index));
+  return prop.maxThreadsPerBlock;
+}
+
 DeviceStream::DeviceStream(Stream stream) : device_(stream.device) {
   set_cuda_device(device_);
   CHECK_CUDA_ERROR(cudaStreamCreate(&stream_));
