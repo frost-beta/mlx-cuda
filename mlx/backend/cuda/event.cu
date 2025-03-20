@@ -1,8 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/event.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/event.h"
 #include "mlx/scheduler.h"
 
 #include <cuda/atomic>
@@ -11,27 +11,29 @@ namespace mlx::core {
 
 namespace {
 
-__host__ __device__
-void event_wait(cuda::atomic<uint64_t>* ac, uint64_t value) {
+__host__ __device__ void event_wait(
+    cuda::atomic<uint64_t>* ac,
+    uint64_t value) {
   uint64_t current;
   while ((current = ac->load()) < value) {
     ac->wait(current);
   }
 }
 
-__global__
-void event_wait_kernel(cuda::atomic<uint64_t>* ac, uint64_t value) {
+__global__ void event_wait_kernel(cuda::atomic<uint64_t>* ac, uint64_t value) {
   event_wait(ac, value);
 }
 
-__host__ __device__
-void event_signal(cuda::atomic<uint64_t>* ac, uint64_t value) {
+__host__ __device__ void event_signal(
+    cuda::atomic<uint64_t>* ac,
+    uint64_t value) {
   ac->store(value);
   ac->notify_all();
 }
 
-__global__
-void event_signal_kernel(cuda::atomic<uint64_t>* ac, uint64_t value) {
+__global__ void event_signal_kernel(
+    cuda::atomic<uint64_t>* ac,
+    uint64_t value) {
   event_signal(ac, value);
 }
 

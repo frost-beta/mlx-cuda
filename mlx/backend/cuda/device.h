@@ -24,11 +24,14 @@ class DeviceStream {
   explicit DeviceStream(Stream stream);
   ~DeviceStream();
 
-  // Returns a CUDA stream for launching kernels.
+  // Return a CUDA stream for launching kernels.
   cudaStream_t schedule_cuda_stream();
 
   // Return the last stream used.
   cudaStream_t last_cuda_stream();
+
+  // Run the function in host after last launched work finishes.
+  void add_host_callback(std::function<void()> func);
 
  private:
   Device device_;
@@ -53,12 +56,12 @@ class CommandEncoder {
 
   template <class F>
   void launch_kernel(F&& fun) {
-    cudaStream_t stream = stream_.schedule_cuda_stream();
-    fun(stream);
-    CHECK_CUDA_ERROR(cudaLaunchHostFunc(
-        stream,
-        [](void* ptr) { delete static_cast<std::vector<array>*>(ptr); },
-        new std::vector<array>(std::move(temporaries_))));
+    fun(stream_.schedule_cuda_stream());
+    stream_.add_host_callback([temporaries = std::move(temporaries_)]() {});
+  }
+
+  DeviceStream& stream() {
+    return stream_;
   }
 
  private:
@@ -66,6 +69,7 @@ class CommandEncoder {
   std::vector<array> temporaries_;
 };
 
+DeviceStream& get_stream(Stream stream);
 CommandEncoder& get_command_encoder(Stream stream);
 
 } // namespace mlx::core::mxcuda

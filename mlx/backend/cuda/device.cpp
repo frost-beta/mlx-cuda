@@ -2,11 +2,14 @@
 
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/backend/metal/metal.h"
 
 #include <cuda/atomic>
 #include <unordered_map>
 
-namespace mlx::core::mxcuda {
+namespace mlx::core {
+
+namespace mxcuda {
 
 DeviceStream::DeviceStream(Stream stream) : device_(stream.device) {
   set_cuda_device(device_);
@@ -35,6 +38,21 @@ cudaStream_t DeviceStream::last_cuda_stream() {
   return stream_;
 }
 
+void DeviceStream::add_host_callback(std::function<void()> func) {
+  CHECK_CUDA_ERROR(cudaLaunchHostFunc(
+      last_cuda_stream(),
+      [](void* ptr) {
+        auto* func = static_cast<std::function<void()>*>(ptr);
+        (*func)();
+        delete func;
+      },
+      new std::function<void()>(std::move(func))));
+}
+
+DeviceStream& get_stream(Stream stream) {
+  return get_command_encoder(stream).stream();
+}
+
 CommandEncoder& get_command_encoder(Stream stream) {
   static std::unordered_map<int, CommandEncoder> encoder_map;
   auto it = encoder_map.find(stream.index);
@@ -44,4 +62,22 @@ CommandEncoder& get_command_encoder(Stream stream) {
   return it->second;
 }
 
-} // namespace mlx::core::mxcuda
+} // namespace mxcuda
+
+namespace metal {
+
+void new_stream(Stream) {}
+
+const std::unordered_map<std::string, std::variant<std::string, size_t>>&
+device_info() {
+  throw std::runtime_error(
+      "[metal::device_info] Not implemented in CUDA backend.");
+};
+
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
+  return nullptr;
+}
+
+} // namespace metal
+
+} // namespace mlx::core

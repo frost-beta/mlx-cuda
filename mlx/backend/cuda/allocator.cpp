@@ -7,21 +7,6 @@
 
 namespace mlx::core {
 
-namespace allocator {
-
-Allocator& allocator() {
-  return mxcuda::allocator();
-}
-
-void* Buffer::raw_ptr() {
-  if (!ptr_) {
-    return nullptr;
-  }
-  return static_cast<mxcuda::CudaBuffer*>(ptr_)->data;
-}
-
-} // namespace allocator
-
 namespace mxcuda {
 
 Buffer CudaAllocator::malloc(size_t size, bool) {
@@ -60,5 +45,46 @@ CudaAllocator& allocator() {
 }
 
 } // namespace mxcuda
+
+namespace allocator {
+
+Allocator& allocator() {
+  return mxcuda::allocator();
+}
+
+void* Buffer::raw_ptr() {
+  if (!ptr_) {
+    return nullptr;
+  }
+  return static_cast<mxcuda::CudaBuffer*>(ptr_)->data;
+}
+
+} // namespace allocator
+
+namespace metal {
+
+void clear_cache() {}
+
+size_t get_active_memory() {
+  return 0;
+}
+size_t get_peak_memory() {
+  return 0;
+}
+void reset_peak_memory() {}
+size_t get_cache_memory() {
+  return 0;
+}
+size_t set_memory_limit(size_t, bool) {
+  return 0;
+}
+size_t set_cache_limit(size_t) {
+  return 0;
+}
+size_t set_wired_limit(size_t) {
+  return 0;
+}
+
+} // namespace metal
 
 } // namespace mlx::core

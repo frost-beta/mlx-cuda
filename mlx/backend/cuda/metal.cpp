@@ -1,65 +1,59 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <stdexcept>
-
 #include "mlx/backend/metal/metal.h"
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/primitives.h"
+#include "mlx/scheduler.h"
+
 namespace mlx::core::metal {
 
 bool is_available() {
-  return false;
-}
-
-void new_stream(Stream) {}
-
-std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
-  return nullptr;
-}
-
-void eval(array&) {
-  throw std::runtime_error(
-      "[metal::eval] Cannot eval on GPU without metal backend");
-}
-
-void finalize(Stream) {
-  throw std::runtime_error(
-      "[metal::finalize] Cannot finalize GPU without metal backend");
-}
-
-void synchronize(Stream) {
-  throw std::runtime_error(
-      "[metal::synchronize] Cannot synchronize GPU without metal backend");
-}
-
-// No-ops when Metal is not available.
-size_t get_active_memory() {
-  return 0;
-}
-size_t get_peak_memory() {
-  return 0;
-}
-void reset_peak_memory() {}
-size_t get_cache_memory() {
-  return 0;
-}
-size_t set_memory_limit(size_t, bool) {
-  return 0;
-}
-size_t set_cache_limit(size_t) {
-  return 0;
-}
-size_t set_wired_limit(size_t) {
-  return 0;
+  return true;
 }
 
 void start_capture(std::string) {}
 void stop_capture() {}
-void clear_cache() {}
 
-const std::unordered_map<std::string, std::variant<std::string, size_t>>&
-device_info() {
-  throw std::runtime_error(
-      "[metal::device_info] Cannot get device info without metal backend");
-};
+void eval(array& arr) {
+  auto s = arr.primitive().stream();
+
+  auto outputs = arr.outputs();
+  {
+    // If the array is a tracer hold a reference
+    // to its inputs so they don't get donated
+    std::vector<array> inputs;
+    if (arr.is_tracer()) {
+      inputs = arr.inputs();
+    }
+
+    arr.primitive().eval_gpu(arr.inputs(), outputs);
+  }
+  std::unordered_set<std::shared_ptr<array::Data>> buffers;
+  for (auto& in : arr.inputs()) {
+    buffers.insert(in.data_shared_ptr());
+  }
+  for (auto& s : arr.siblings()) {
+    buffers.insert(s.data_shared_ptr());
+  }
+  // Remove the output if it was donated to by an input
+  if (auto it = buffers.find(arr.data_shared_ptr()); it != buffers.end()) {
+    buffers.erase(it);
+  }
+
+  scheduler::notify_new_task(s);
+  mxcuda::get_stream(s).add_host_callback([s, buffers = std::move(buffers)] {
+    scheduler::notify_task_completion(s);
+  });
+}
+
+void finalize(Stream) {
+  // CUDA kernels are launched immediately so there is nothing to do.
+}
+
+void synchronize(Stream stream) {
+  // TODO: Wait for all cuda streams in mlx stream.
+  cudaStreamSynchronize(mxcuda::get_stream(stream).last_cuda_stream());
+}
 
 } // namespace mlx::core::metal
