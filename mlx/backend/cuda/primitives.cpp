@@ -17,6 +17,18 @@
 
 namespace mlx::core {
 
+void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 NO_GPU(Abs)
 NO_GPU(Add)
 NO_GPU(AddMM)
@@ -32,12 +44,9 @@ NO_GPU(ArgPartition)
 NO_GPU(ArgReduce)
 NO_GPU(ArgSort)
 NO_GPU(AsType)
-NO_GPU(AsStrided)
 NO_GPU(BitwiseBinary)
 NO_GPU(BitwiseInvert)
 NO_GPU(BlockMaskedMM)
-NO_GPU(Broadcast)
-NO_GPU(BroadcastAxes)
 NO_GPU(Ceil)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Concatenate)

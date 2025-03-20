@@ -20,15 +20,15 @@ __host__ __device__ void event_wait(
   }
 }
 
-__global__ void event_wait_kernel(cuda::atomic<uint64_t>* ac, uint64_t value) {
-  event_wait(ac, value);
-}
-
 __host__ __device__ void event_signal(
     cuda::atomic<uint64_t>* ac,
     uint64_t value) {
   ac->store(value);
   ac->notify_all();
+}
+
+__global__ void event_wait_kernel(cuda::atomic<uint64_t>* ac, uint64_t value) {
+  event_wait(ac, value);
 }
 
 __global__ void event_signal_kernel(
