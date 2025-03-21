@@ -158,14 +158,14 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
 //
 // An example usage is:
 //
-// MLX_SWITCH_REAL_TYPES(input.dtype(), "example", CTYPE, [&]() {
+// MLX_SWITCH_ALL_TYPES(input.dtype(), CTYPE, [&]() {
 //   output.data<CTYPE>[0] = input.data<CTYPE>[0];
 // });
 //
 // Note that these can be nested as well:
 //
-// MLX_SWITCH_REAL_TYPES(input.dtype(), "example", CTYPE_IN, [&]() {
-//   MLX_SWITCH_REAL_TYPES(output.dtype(), "example", CTYPE_OUT, [&]() {
+// MLX_SWITCH_ALL_TYPES(input.dtype(), CTYPE_IN, [&]() {
+//   MLX_SWITCH_ALL_TYPES(output.dtype(), CTYPE_OUT, [&]() {
 //     output.dat<CTYPE_OUT>[0] = input.data<CTYPE_IN>[0];
 //   });
 // });

@@ -10,7 +10,7 @@
 
 namespace mlx::core {
 
-// Maps Dtypes to C++ types.
+// Maps CPU types to CUDA types.
 template <typename T>
 struct CTypeToCudaType {
   using type = T;

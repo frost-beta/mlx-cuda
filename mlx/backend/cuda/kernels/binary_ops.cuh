@@ -11,10 +11,6 @@
 
 namespace mlx::core::mxcuda {
 
-// TODO: Code below are (almost) identical to backend/metal/kernels/binary_ops.h
-// and we should either merge the files or clean up this one.
-namespace metal = cuda::std;
-
 struct Add {
   template <typename T>
   __device__ T operator()(T x, T y) {
@@ -26,8 +22,8 @@ struct FloorDivide {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if constexpr (
-        metal::is_same_v<T, float> || metal::is_same_v<T, __half> ||
-        metal::is_same_v<T, __nv_bfloat16>) {
+        cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, __half> ||
+        cuda::std::is_same_v<T, __nv_bfloat16>) {
       return trunc(x / y);
     } else {
       return x / y;
@@ -44,14 +40,15 @@ struct Divide {
 
 struct Remainder {
   template <typename T>
-  __device__
-      metal::enable_if_t<metal::is_integral_v<T> & !metal::is_signed_v<T>, T>
+  __device__ cuda::std::
+      enable_if_t<cuda::std::is_integral_v<T> & !cuda::std::is_signed_v<T>, T>
       operator()(T x, T y) {
     return x % y;
   }
+
   template <typename T>
-  __device__
-      metal::enable_if_t<metal::is_integral_v<T> & metal::is_signed_v<T>, T>
+  __device__ cuda::std::
+      enable_if_t<cuda::std::is_integral_v<T> & cuda::std::is_signed_v<T>, T>
       operator()(T x, T y) {
     auto r = x % y;
     if (r != 0 && (r < 0 != y < 0)) {
@@ -59,8 +56,9 @@ struct Remainder {
     }
     return r;
   }
+
   template <typename T>
-  __device__ metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
       T x,
       T y) {
     T r = fmod(x, y);
@@ -69,10 +67,10 @@ struct Remainder {
     }
     return r;
   }
+
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_same_v<T, cuComplex>> operator()(
-      T x,
-      T y) {
+  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
+  operator()(T x, T y) {
     return x % y;
   }
 };
@@ -130,11 +128,11 @@ struct LogAddExp {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if (isnan(x) || isnan(y)) {
-      return metal::numeric_limits<T>::quiet_NaN();
+      return cuda::std::numeric_limits<T>::quiet_NaN();
     }
-    constexpr T inf = metal::numeric_limits<T>::infinity();
-    T maxval = metal::max(x, y);
-    T minval = metal::min(x, y);
+    constexpr T inf = cuda::std::numeric_limits<T>::infinity();
+    T maxval = cuda::std::max(x, y);
+    T minval = cuda::std::min(x, y);
     return (minval == -inf || maxval == inf)
         ? maxval
         : (maxval + log1p(expf(minval - maxval)));
@@ -143,14 +141,14 @@ struct LogAddExp {
 
 struct Maximum {
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
       T x,
       T y) {
-    return metal::max(x, y);
+    return cuda::std::max(x, y);
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
       T x,
       T y) {
     if (isnan(x)) {
@@ -160,9 +158,8 @@ struct Maximum {
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_same_v<T, cuComplex>> operator()(
-      T x,
-      T y) {
+  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
+  operator()(T x, T y) {
     if (isnan(x.real) || isnan(x.imag)) {
       return x;
     }
@@ -172,14 +169,14 @@ struct Maximum {
 
 struct Minimum {
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
       T x,
       T y) {
-    return metal::min(x, y);
+    return cuda::std::min(x, y);
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
       T x,
       T y) {
     if (isnan(x)) {
@@ -189,9 +186,8 @@ struct Minimum {
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_same_v<T, cuComplex>> operator()(
-      T x,
-      T y) {
+  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
+  operator()(T x, T y) {
     if (isnan(x.real) || isnan(x.imag)) {
       return x;
     }
@@ -219,15 +215,15 @@ struct NotEqual {
 
 struct Power {
   template <typename T>
-  __device__ metal::enable_if_t<
-      !metal::is_integral_v<T> && !metal::is_same_v<T, cuComplex>,
+  __device__ cuda::std::enable_if_t<
+      !cuda::std::is_integral_v<T> && !cuda::std::is_same_v<T, cuComplex>,
       T>
   operator()(T base, T exp) {
     return powf(base, exp);
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_integral_v<T>, T> operator()(
+  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
       T base,
       T exp) {
     T res = 1;
@@ -242,9 +238,8 @@ struct Power {
   }
 
   template <typename T>
-  __device__ metal::enable_if_t<metal::is_same_v<T, cuComplex>> operator()(
-      T x,
-      T y) {
+  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
+  operator()(T x, T y) {
     auto x_theta = atan2f(x.imag, x.real);
     auto x_ln_r = 0.5 * logf(x.real * x.real + x.imag * x.imag);
     auto mag = expf(y.real * x_ln_r - y.imag * x_theta);
@@ -318,7 +313,7 @@ struct ArcTan2 {
 
 struct DivMod {
   template <typename T>
-  __device__ metal::array<T, 2> operator()(T x, T y) {
+  __device__ cuda::std::array<T, 2> operator()(T x, T y) {
     return {FloorDivide{}(x, y), Remainder{}(x, y)};
   };
 };
