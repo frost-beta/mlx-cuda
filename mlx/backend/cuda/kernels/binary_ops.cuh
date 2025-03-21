@@ -2,34 +2,12 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/kernels/bf16_math.cuh"
+#include "mlx/backend/cuda/kernels/fp16_math.cuh"
 #include "mlx/backend/cuda/kernels/cucomplex_math.cuh"
 
-#include <cuda_fp16.h>
 #include <cuda/std/array>
-#include <cuda/std/type_traits>
 
 namespace mlx::core::mxcuda {
-
-#if __CUDA_ARCH__ >= 800
-template <typename T>
-__forceinline__ __device__ bool isnan(T x) {
-  if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __hisnan(x);
-  } else {
-    return ::isnan(x);
-  }
-}
-
-template <typename T>
-__forceinline__ __device__ T fmod(T x, T y) {
-  if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __float2bfloat16(::fmod(__bfloat162float(x), __bfloat162float(y)));
-  } else {
-    return ::fmod(x, y);
-  }
-}
-#endif
 
 struct Add {
   template <typename T>
