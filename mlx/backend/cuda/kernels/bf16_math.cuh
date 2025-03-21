@@ -21,7 +21,7 @@
 #include <cuda_fp16.h>
 
 __forceinline__ __device__ __nv_bfloat16
-bf16hadd(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+bf16hadd(__nv_bfloat16 x, __nv_bfloat16 y) {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
   return __float2bfloat16(__bfloat162float(x) + __bfloat162float(y));
 #else
@@ -30,7 +30,7 @@ bf16hadd(const __nv_bfloat16 x, const __nv_bfloat16 y) {
 }
 
 __forceinline__ __device__ __nv_bfloat16
-bf16hsub(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+bf16hsub(__nv_bfloat16 x, __nv_bfloat16 y) {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
   return __float2bfloat16(__bfloat162float(x) - __bfloat162float(y));
 #else
@@ -39,7 +39,7 @@ bf16hsub(const __nv_bfloat16 x, const __nv_bfloat16 y) {
 }
 
 __forceinline__ __device__ __nv_bfloat16
-bf16hmul(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+bf16hmul(__nv_bfloat16 x, __nv_bfloat16 y) {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
   return __float2bfloat16(__bfloat162float(x) * __bfloat162float(y));
 #else
@@ -48,7 +48,7 @@ bf16hmul(const __nv_bfloat16 x, const __nv_bfloat16 y) {
 }
 
 __forceinline__ __device__ __nv_bfloat16
-bf16hdiv(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+bf16hdiv(__nv_bfloat16 x, __nv_bfloat16 y) {
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
   float fx = __bfloat162float(x);
   float fy = __bfloat162float(y);
@@ -59,37 +59,71 @@ bf16hdiv(const __nv_bfloat16 x, const __nv_bfloat16 y) {
 #endif
 }
 
+__forceinline__ __device__ bool bf16hgt(__nv_bfloat16 x, __nv_bfloat16 y) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
+  float fx = __bfloat162float(x);
+  float fy = __bfloat162float(y);
+  return fx > fy;
+#else
+  return __hgt(x, y);
+#endif
+}
+
+__forceinline__ __device__ bool bf16hlt(__nv_bfloat16 x, __nv_bfloat16 y) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
+  float fx = __bfloat162float(x);
+  float fy = __bfloat162float(y);
+  return fx > fy;
+#else
+  return __hlt(x, y);
+#endif
+}
+
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 800)
 __forceinline__ __device__ __nv_bfloat16
-operator+(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator+(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hadd(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator+=(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator+=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hadd(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator-(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator-(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hsub(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator-=(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator-=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hsub(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator*(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator*(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hmul(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator*=(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator*=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hmul(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator/(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator/(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hdiv(x, y);
 };
 __forceinline__ __device__ __nv_bfloat16
-operator/=(const __nv_bfloat16 x, const __nv_bfloat16 y) {
+operator/=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hdiv(x, y);
 };
-#endif
+#endif // defined(__CUDA_ARCH__) && (__CUDA_ARCH__ < 800)
+__forceinline__ __device__ bool operator>(__nv_bfloat16 x, __nv_bfloat16 y) {
+  return bf16hgt(x, y);
+}
+__forceinline__ __device__ bool operator<(__nv_bfloat16 x, __nv_bfloat16 y) {
+  return bf16hlt(x, y);
+}
+template <typename T>
+__forceinline__ __device__ bool operator>(__nv_bfloat16 x, T y) {
+  return __bfloat162float(x) < static_cast<float>(y);
+}
+template <typename T>
+__forceinline__ __device__ bool operator<(__nv_bfloat16 x, T y) {
+  return __bfloat162float(x) > static_cast<float>(y);
+}

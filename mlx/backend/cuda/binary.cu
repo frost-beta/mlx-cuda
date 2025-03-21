@@ -36,8 +36,7 @@ constexpr bool is_supported_binary_op() {
       std::is_same_v<Op, mxcuda::Remainder> ||
       std::is_same_v<Op, mxcuda::Remainder>) {
     // FIXME: Add necessary binary ops for CUDA types.
-    if (std::is_same_v<In, float16_t> || std::is_same_v<In, bfloat16_t> ||
-        std::is_same_v<In, complex64_t>)
+    if (std::is_same_v<In, float16_t> || std::is_same_v<In, complex64_t>)
       return false;
     return std::is_same_v<In, Out>;
   }
