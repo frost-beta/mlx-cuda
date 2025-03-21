@@ -18,25 +18,39 @@ namespace mlx::core {
 // Return string representation of dtype.
 const char* dtype_to_string(Dtype arg);
 
+// Macros that iterate across different subsets of Dtypes.
+//
+// For all of these macros, the final `_` parameter is the name of another macro
+// that takes two parameters: the name of a C type, and the name of the
+// corresponding Dtype enumerator.
+//
+// Note that these macros should use fully-qualified namespaces (starting with
+// `::`) to ensure that they can be called safely in any arbitrary namespace.
+#define MLX_FORALL_INT_TYPES(_) \
+  _(uint8_t, uint8)             \
+  _(uint16_t, uint16)           \
+  _(uint32_t, uint32)           \
+  _(uint64_t, uint64)           \
+  _(int8_t, int8)               \
+  _(int16_t, int16)             \
+  _(int32_t, int32)             \
+  _(int64_t, int64)
+
+#define MLX_FORALL_FLOAT_TYPES(_) \
+  _(float16_t, float16)           \
+  _(float, float32)               \
+  _(double, float64)              \
+  _(bfloat16_t, bfloat16)
+
 // Calls the provided macro on every Dtype, providing the C type and the
 // Dtype name to each call.
 //
 // @param _ A macro that takes two parameters: the name of a C type, and the
 //          name of the corresponding Dtype enumerator.
 #define MLX_FORALL_DTYPES(_) \
+  MLX_FORALL_INT_TYPES(_)    \
+  MLX_FORALL_FLOAT_TYPES(_)  \
   _(bool, bool_)             \
-  _(uint8_t, uint8)          \
-  _(uint16_t, uint16)        \
-  _(uint32_t, uint32)        \
-  _(uint64_t, uint64)        \
-  _(int8_t, int8)            \
-  _(int16_t, int16)          \
-  _(int32_t, int32)          \
-  _(int64_t, int64)          \
-  _(float16_t, float16)      \
-  _(float, float32)          \
-  _(double, float64)         \
-  _(bfloat16_t, bfloat16)    \
   _(complex64_t, complex64)
 
 // Maps Dtypes to C++ types.
@@ -77,7 +91,12 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
     return __VA_ARGS__();                                             \
   }
 
-#define MLX_INTERNAL_SWITCH(TYPE, NAME, ...)                            \
+#define MLX_INTERNAL_SWITCH(TYPE, ...) \
+  [&] {                                \
+    switch (TYPE) { __VA_ARGS__ }      \
+  }()
+
+#define MLX_INTERNAL_SWITCH_CHECKED(TYPE, NAME, ...)                    \
   [&] {                                                                 \
     switch (TYPE) {                                                     \
       __VA_ARGS__                                                       \
@@ -87,34 +106,40 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
     }                                                                   \
   }()
 
-#define MLX_INTERNAL_SWITCH_CASE_ALL_TYPES(CTYPE_ALIAS, ...)       \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::bool_, CTYPE_ALIAS, __VA_ARGS__)    \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::uint8, CTYPE_ALIAS, __VA_ARGS__)    \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::uint16, CTYPE_ALIAS, __VA_ARGS__)   \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::uint32, CTYPE_ALIAS, __VA_ARGS__)   \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::uint64, CTYPE_ALIAS, __VA_ARGS__)   \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::int8, CTYPE_ALIAS, __VA_ARGS__)     \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::int16, CTYPE_ALIAS, __VA_ARGS__)    \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::int32, CTYPE_ALIAS, __VA_ARGS__)    \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::int64, CTYPE_ALIAS, __VA_ARGS__)    \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::float16, CTYPE_ALIAS, __VA_ARGS__)  \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::float32, CTYPE_ALIAS, __VA_ARGS__)  \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::float64, CTYPE_ALIAS, __VA_ARGS__)  \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
-      ::mlx::core::Dtype::Val::bfloat16, CTYPE_ALIAS, __VA_ARGS__) \
-  MLX_INTERNAL_SWITCH_CASE(                                        \
+#define MLX_INTERNAL_SWITCH_CASE_INT_TYPES(CTYPE_ALIAS, ...)     \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::uint8, CTYPE_ALIAS, __VA_ARGS__)  \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::uint16, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::uint32, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::uint64, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::int8, CTYPE_ALIAS, __VA_ARGS__)   \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::int16, CTYPE_ALIAS, __VA_ARGS__)  \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::int32, CTYPE_ALIAS, __VA_ARGS__)  \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::int64, CTYPE_ALIAS, __VA_ARGS__)
+
+#define MLX_INTERNAL_SWITCH_CASE_FLOAT_TYPES(CTYPE_ALIAS, ...)    \
+  MLX_INTERNAL_SWITCH_CASE(                                       \
+      ::mlx::core::Dtype::Val::float16, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                       \
+      ::mlx::core::Dtype::Val::float32, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                       \
+      ::mlx::core::Dtype::Val::float64, CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                       \
+      ::mlx::core::Dtype::Val::bfloat16, CTYPE_ALIAS, __VA_ARGS__)
+
+#define MLX_INTERNAL_SWITCH_CASE_ALL_TYPES(CTYPE_ALIAS, ...)     \
+  MLX_INTERNAL_SWITCH_CASE_INT_TYPES(CTYPE_ALIAS, __VA_ARGS__)   \
+  MLX_INTERNAL_SWITCH_CASE_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
+      ::mlx::core::Dtype::Val::bool_, CTYPE_ALIAS, __VA_ARGS__)  \
+  MLX_INTERNAL_SWITCH_CASE(                                      \
       ::mlx::core::Dtype::Val::complex64, CTYPE_ALIAS, __VA_ARGS__)
 
 // Switch case macros
@@ -149,10 +174,14 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
 // difference is that the CTYPE_ALIAS argument is exposed to users, which is
 // used to alias the ctype associated with the Dtype that is being handled.
 
-#define MLX_SWITCH_ALL_TYPES(TYPE, NAME, CTYPE_ALIAS, ...) \
-  MLX_INTERNAL_SWITCH(                                     \
-      TYPE,                                                \
-      NAME,                                                \
+#define MLX_SWITCH_ALL_TYPES(TYPE, CTYPE_ALIAS, ...) \
+  MLX_INTERNAL_SWITCH(                               \
+      TYPE, MLX_INTERNAL_SWITCH_CASE_ALL_TYPES(CTYPE_ALIAS, __VA_ARGS__))
+
+#define MLX_SWITCH_ALL_TYPES_CHECKED(TYPE, NAME, CTYPE_ALIAS, ...) \
+  MLX_INTERNAL_SWITCH_CHECKED(                                     \
+      TYPE,                                                        \
+      NAME,                                                        \
       MLX_INTERNAL_SWITCH_CASE_ALL_TYPES(CTYPE_ALIAS, __VA_ARGS__))
 
 } // namespace mlx::core

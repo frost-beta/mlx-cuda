@@ -31,11 +31,14 @@ struct CTypeToCudaType<complex64_t> {
   using type = cuComplex;
 };
 
+template <typename T>
+using cuda_type_t = typename CTypeToCudaType<T>::type;
+
 // Replace native type to CUDA types.
-#define MLX_SWITCH_CUDA_TYPES(TYPE, NAME, CTYPE_ALIAS, ...)               \
-  MLX_SWITCH_ALL_TYPES(TYPE, NAME, CTYPE_NATIVE, [&]() {                  \
-    using CTYPE_ALIAS = ::mlx::core::CTypeToCudaType<CTYPE_NATIVE>::type; \
-    return __VA_ARGS__();                                                 \
+#define MLX_SWITCH_CUDA_TYPES(TYPE, CTYPE_ALIAS, ...)           \
+  MLX_SWITCH_ALL_TYPES(TYPE, CTYPE_NATIVE, [&]() {              \
+    using CTYPE_ALIAS = ::mlx::core::cuda_type_t<CTYPE_NATIVE>; \
+    return __VA_ARGS__();                                       \
   })
 
 } // namespace mlx::core

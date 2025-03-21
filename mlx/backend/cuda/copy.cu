@@ -58,8 +58,8 @@ void copy_gpu_inplace(
   encoder.set_input_array(input);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_CUDA_TYPES(input.dtype(), "copy in", CTYPE_IN, [&]() {
-      MLX_SWITCH_CUDA_TYPES(out.dtype(), "copy out", CTYPE_OUT, [&]() {
+    MLX_SWITCH_CUDA_TYPES(input.dtype(), CTYPE_IN, [&]() {
+      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         if constexpr (std::is_convertible_v<CTYPE_IN, CTYPE_OUT>) {
           if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
             throw std::runtime_error(
@@ -84,7 +84,7 @@ void copy_gpu_inplace(
           }
         } else {
           throw std::runtime_error(fmt::format(
-              "Can not copy data from dtype %s to %s",
+              "Can not copy data from dtype {} to {}",
               dtype_to_string(input.dtype()),
               dtype_to_string(out.dtype())));
         }

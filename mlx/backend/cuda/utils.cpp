@@ -1,12 +1,13 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/utils.h"
+#include "mlx/primitives.h"
 
 #include <fmt/format.h>
 
 namespace mlx::core {
 
-// TODO: The implementation is identical to get_2d_grid_dims.
+// TODO: The implementation is identical to meta/utils.cpp .
 dim3 get_2d_num_blocks(
     const Shape& shape,
     const Strides& strides,
@@ -49,10 +50,17 @@ dim3 get_2d_num_blocks(
   return dim3(static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
 }
 
+// TODO: The implementation is identical to meta/utils.cpp .
+std::string get_primitive_string(Primitive* primitive) {
+  std::ostringstream op_t;
+  primitive->print(op_t);
+  return op_t.str();
+}
+
 void check_cuda_error(const char* name, cudaError_t err) {
   if (err != cudaSuccess) {
     throw std::runtime_error(
-        fmt::format("%s failed: %s", name, cudaGetErrorString(err)));
+        fmt::format("{} failed: {}", name, cudaGetErrorString(err)));
   }
 }
 

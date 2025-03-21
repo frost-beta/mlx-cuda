@@ -14,7 +14,7 @@ Buffer CudaAllocator::malloc(size_t size, bool) {
   cudaError_t err = cudaMallocManaged(&buf->data, size);
   if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
     throw std::runtime_error(
-        fmt::format("cudaMallocManaged failed: %s", cudaGetErrorString(err)));
+        fmt::format("cudaMallocManaged failed: {}", cudaGetErrorString(err)));
   }
   return Buffer{buf};
 }

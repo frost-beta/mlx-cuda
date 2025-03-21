@@ -19,6 +19,8 @@ dim3 get_2d_num_blocks(
     const Strides& strides,
     size_t num_threads);
 
+std::string get_primitive_string(Primitive* primitive);
+
 void check_cuda_error(const char* name, cudaError_t err);
 
 // Throw exception if the cuda API does not succeed.
