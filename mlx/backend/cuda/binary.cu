@@ -6,8 +6,6 @@
 #include "mlx/backend/cuda/kernels/binary.cuh"
 #include "mlx/primitives.h"
 
-#include <assert.h>
-
 #define BINARY_GPU(func)                                                     \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) {        \
     auto& s = out.primitive().stream();                                      \
@@ -25,6 +23,11 @@
 namespace mlx::core {
 
 namespace {
+
+template <typename T>
+inline constexpr bool is_floating_v =
+    std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
 
 template <typename Op, typename In, typename Out>
 constexpr bool is_supported_binary_op() {
@@ -45,11 +48,27 @@ constexpr bool is_supported_binary_op() {
       std::is_same_v<Op, mxcuda::NotEqual>) {
     return std::is_same_v<Out, bool>;
   }
+  if (std::is_same_v<Op, mxcuda::LogicalAnd> ||
+      std::is_same_v<Op, mxcuda::LogicalOr>) {
+    return std::is_same_v<Out, bool> && std::is_same_v<In, bool>;
+  }
+  if (std::is_same_v<Op, mxcuda::NaNEqual>) {
+    return std::is_same_v<Out, bool> &&
+        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+  }
   if (std::is_same_v<Op, mxcuda::LogAddExp> ||
       std::is_same_v<Op, mxcuda::ArcTan2>) {
-    return std::is_same_v<In, Out> &&
-        (std::is_same_v<In, float> || std::is_same_v<In, float16_t> ||
-         std::is_same_v<In, bfloat16_t>);
+    return std::is_same_v<In, Out> && is_floating_v<In>;
+  }
+  if (std::is_same_v<Op, mxcuda::BitwiseAnd> ||
+      std::is_same_v<Op, mxcuda::BitwiseOr> ||
+      std::is_same_v<Op, mxcuda::BitwiseXor>) {
+    return std::is_same_v<In, Out> && std::is_integral_v<In>;
+  }
+  if (std::is_same_v<Op, mxcuda::LeftShift> ||
+      std::is_same_v<Op, mxcuda::RightShift>) {
+    return std::is_same_v<In, Out> && std::is_integral_v<In> &&
+        !std::is_same_v<In, bool>;
   }
   return false;
 }
@@ -174,7 +193,6 @@ void binary_op_gpu(
     std::vector<array>& outputs,
     std::string_view op,
     const Stream& s) {
-  assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
@@ -189,7 +207,6 @@ void binary_op_gpu(
     array& out,
     std::string_view op,
     const Stream& s) {
-  assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
