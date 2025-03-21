@@ -45,6 +45,12 @@ constexpr bool is_supported_binary_op() {
       std::is_same_v<Op, mxcuda::NotEqual>) {
     return std::is_same_v<Out, bool>;
   }
+  if (std::is_same_v<Op, mxcuda::LogAddExp> ||
+      std::is_same_v<Op, mxcuda::ArcTan2>) {
+    return std::is_same_v<In, Out> &&
+        (std::is_same_v<In, float> || std::is_same_v<In, float16_t> ||
+         std::is_same_v<In, bfloat16_t>);
+  }
   return false;
 }
 

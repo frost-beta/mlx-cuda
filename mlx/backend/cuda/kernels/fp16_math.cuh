@@ -33,6 +33,32 @@ __forceinline__ __device__ T fmod(T x, T y) {
   }
 }
 
+template <typename T>
+__forceinline__ __device__ T max(T x, T y) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __float2half(::max(__half2float(x), __half2float(y)));
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __float2bfloat16(::max(__bfloat162float(x), __bfloat162float(y)));
+#endif
+  } else {
+    return ::max(x, y);
+  }
+}
+
+template <typename T>
+__forceinline__ __device__ T min(T x, T y) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __float2half(::min(__half2float(x), __half2float(y)));
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __float2bfloat16(::min(__bfloat162float(x), __bfloat162float(y)));
+#endif
+  } else {
+    return ::min(x, y);
+  }
+}
+
 __forceinline__ __device__ __nv_bfloat16
 bf16hadd(__nv_bfloat16 x, __nv_bfloat16 y) {
 #if __CUDA_ARCH__ < 800
@@ -145,6 +171,10 @@ __forceinline__ __device__ bool operator<=(__nv_bfloat16 x, __nv_bfloat16 y) {
 
 #endif // __CUDA_ARCH__ < 800
 
+__forceinline__ __device__ __nv_bfloat16 operator+(__nv_bfloat16 x, float y) {
+  return __float2bfloat16(__bfloat162float(x) + y);
+}
+
 template <typename T>
 __forceinline__ __device__ bool operator>(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) < static_cast<float>(y);
@@ -163,6 +193,10 @@ __forceinline__ __device__ bool operator==(__nv_bfloat16 x, T y) {
 template <typename T>
 __forceinline__ __device__ bool operator!=(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) != static_cast<float>(y);
+}
+
+__forceinline__ __device__ __half operator+(__half x, float y) {
+  return __float2half(__half2float(x) + y);
 }
 
 template <typename T>
