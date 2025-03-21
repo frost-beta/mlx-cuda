@@ -17,7 +17,7 @@ set_target_properties(
              # Compute capability 7 is required for synchronization between
              # CPU/GPU with managed memory.
              # TODO: Add more architectures for release build.
-             CUDA_ARCHITECTURES "70")
+             CUDA_ARCHITECTURES "70;80")
 
 # Make CUDA APIs visible in .cpp files.
 find_package(CUDAToolkit REQUIRED)
