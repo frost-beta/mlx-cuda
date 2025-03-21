@@ -2,12 +2,17 @@
 
 #pragma once
 
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
 #include "mlx/backend/cuda/kernels/cucomplex_math.cuh"
+#include "mlx/backend/cuda/kernels/fp16_math.cuh"
 
 #include <cuda/std/array>
 
 namespace mlx::core::mxcuda {
+
+using cuda::std::enable_if_t;
+using cuda::std::is_integral_v;
+using cuda::std::is_same_v;
+using cuda::std::is_signed_v;
 
 struct Add {
   template <typename T>
@@ -20,8 +25,8 @@ struct FloorDivide {
   template <typename T>
   __device__ T operator()(T x, T y) {
     if constexpr (
-        cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, __half> ||
-        cuda::std::is_same_v<T, __nv_bfloat16>) {
+        is_same_v<T, float> || is_same_v<T, __half> ||
+        is_same_v<T, __nv_bfloat16>) {
       return trunc(x / y);
     } else {
       return x / y;
@@ -38,16 +43,16 @@ struct Divide {
 
 struct Remainder {
   template <typename T>
-  __device__ cuda::std::
-      enable_if_t<cuda::std::is_integral_v<T> & !cuda::std::is_signed_v<T>, T>
-      operator()(T x, T y) {
+  __device__ enable_if_t<is_integral_v<T> & !is_signed_v<T>, T> operator()(
+      T x,
+      T y) {
     return x % y;
   }
 
   template <typename T>
-  __device__ cuda::std::
-      enable_if_t<cuda::std::is_integral_v<T> & cuda::std::is_signed_v<T>, T>
-      operator()(T x, T y) {
+  __device__ enable_if_t<is_integral_v<T> & is_signed_v<T>, T> operator()(
+      T x,
+      T y) {
     auto r = x % y;
     if (r != 0 && (r < 0 != y < 0)) {
       r += y;
@@ -56,9 +61,8 @@ struct Remainder {
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
-      T x,
-      T y) {
+  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
+  operator()(T x, T y) {
     T r = fmod(x, y);
     if (r != 0 && (r < 0 != y < 0)) {
       r += y;
@@ -67,8 +71,7 @@ struct Remainder {
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
-  operator()(T x, T y) {
+  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
     return x % y;
   }
 };
@@ -85,9 +88,12 @@ struct NaNEqual {
   __device__ bool operator()(T x, T y) {
     if constexpr (std::is_same_v<T, cuComplex>) {
       return x == y ||
-          (isnan(x.real) && isnan(y.real) && isnan(x.imag) && isnan(y.imag)) ||
-          (x.real == y.real && isnan(x.imag) && isnan(y.imag)) ||
-          (isnan(x.real) && isnan(y.real) && x.imag == y.imag);
+          (isnan(cuCrealf(x)) && isnan(cuCrealf(y)) && isnan(cuCimagf(x)) &&
+           isnan(cuCimagf(y))) ||
+          (cuCrealf(x) == cuCrealf(y) && isnan(cuCimagf(x)) &&
+           isnan(cuCimagf(y))) ||
+          (isnan(cuCrealf(x)) && isnan(cuCrealf(y)) &&
+           cuCimagf(x) == cuCimagf(y));
     } else {
       return x == y || (isnan(x) && isnan(y));
     }
@@ -129,8 +135,8 @@ struct LogAddExp {
       return cuda::std::numeric_limits<T>::quiet_NaN();
     }
     constexpr T inf = cuda::std::numeric_limits<T>::infinity();
-    T maxval = cuda::std::max(x, y);
-    T minval = cuda::std::min(x, y);
+    T maxval = max(x, y);
+    T minval = min(x, y);
     return (minval == -inf || maxval == inf)
         ? maxval
         : (maxval + log1p(expf(minval - maxval)));
@@ -139,16 +145,13 @@ struct LogAddExp {
 
 struct Maximum {
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
-      T x,
-      T y) {
-    return cuda::std::max(x, y);
+  __device__ enable_if_t<is_integral_v<T>, T> operator()(T x, T y) {
+    return max(x, y);
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
-      T x,
-      T y) {
+  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
+  operator()(T x, T y) {
     if (isnan(x)) {
       return x;
     }
@@ -156,9 +159,8 @@ struct Maximum {
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
-  operator()(T x, T y) {
-    if (isnan(x.real) || isnan(x.imag)) {
+  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
+    if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
       return x;
     }
     return x > y ? x : y;
@@ -167,16 +169,13 @@ struct Maximum {
 
 struct Minimum {
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
-      T x,
-      T y) {
-    return cuda::std::min(x, y);
+  __device__ enable_if_t<is_integral_v<T>, T> operator()(T x, T y) {
+    return min(x, y);
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<!cuda::std::is_integral_v<T>, T> operator()(
-      T x,
-      T y) {
+  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
+  operator()(T x, T y) {
     if (isnan(x)) {
       return x;
     }
@@ -184,9 +183,8 @@ struct Minimum {
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
-  operator()(T x, T y) {
-    if (isnan(x.real) || isnan(x.imag)) {
+  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
+    if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
       return x;
     }
     return x < y ? x : y;
@@ -204,7 +202,7 @@ struct NotEqual {
   template <typename T>
   __device__ bool operator()(T x, T y) {
     if constexpr (std::is_same_v<T, cuComplex>) {
-      return x.real != y.real || x.imag != y.imag;
+      return cuCrealf(x) != cuCrealf(y) || cuCimagf(x) != cuCimagf(y);
     } else {
       return x != y;
     }
@@ -213,17 +211,13 @@ struct NotEqual {
 
 struct Power {
   template <typename T>
-  __device__ cuda::std::enable_if_t<
-      !cuda::std::is_integral_v<T> && !cuda::std::is_same_v<T, cuComplex>,
-      T>
+  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
   operator()(T base, T exp) {
     return powf(base, exp);
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_integral_v<T>, T> operator()(
-      T base,
-      T exp) {
+  __device__ enable_if_t<is_integral_v<T>, T> operator()(T base, T exp) {
     T res = 1;
     while (exp) {
       if (exp & 1) {
@@ -236,13 +230,13 @@ struct Power {
   }
 
   template <typename T>
-  __device__ cuda::std::enable_if_t<cuda::std::is_same_v<T, cuComplex>>
-  operator()(T x, T y) {
-    auto x_theta = atan2f(x.imag, x.real);
-    auto x_ln_r = 0.5 * logf(x.real * x.real + x.imag * x.imag);
-    auto mag = expf(y.real * x_ln_r - y.imag * x_theta);
-    auto phase = y.imag * x_ln_r + y.real * x_theta;
-    return {mag * cosf(phase), mag * sinf(phase)};
+  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
+    auto x_theta = atan2f(cuCimagf(x), cuCrealf(x));
+    auto x_ln_r =
+        0.5 * logf(cuCrealf(x) * cuCrealf(x) + cuCimagf(x) * cuCimagf(x));
+    auto mag = expf(cuCrealf(y) * x_ln_r - cuCimagf(y) * x_theta);
+    auto phase = cuCimagf(y) * x_ln_r + cuCrealf(y) * x_theta;
+    return make_cuFloatComplex(mag * cosf(phase), mag * sinf(phase));
   }
 };
 

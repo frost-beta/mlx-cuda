@@ -35,9 +35,6 @@ constexpr bool is_supported_binary_op() {
       std::is_same_v<Op, mxcuda::Power> ||
       std::is_same_v<Op, mxcuda::Remainder> ||
       std::is_same_v<Op, mxcuda::Remainder>) {
-    // FIXME: Add necessary binary ops for CUDA types.
-    if (std::is_same_v<In, complex64_t>)
-      return false;
     return std::is_same_v<In, Out>;
   }
   return false;
@@ -81,6 +78,8 @@ void binary_op_gpu_inplace(
     large = out.data_size() > UINT32_MAX;
     work_per_thread = 1;
   }
+
+  std::ignore = work_per_thread;
 
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(a, b);
