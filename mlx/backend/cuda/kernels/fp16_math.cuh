@@ -86,73 +86,100 @@ __forceinline__ __device__ bool bf16hlt(__nv_bfloat16 x, __nv_bfloat16 y) {
 }
 
 #if (__CUDA_ARCH__ < 800)
+
 __forceinline__ __device__ __nv_bfloat16
 operator+(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hadd(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator+=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hadd(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator-(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hsub(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator-=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hsub(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator*(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hmul(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator*=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hmul(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator/(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hdiv(x, y);
-};
+}
+
 __forceinline__ __device__ __nv_bfloat16
 operator/=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hdiv(x, y);
-};
+}
+
 __forceinline__ __device__ bool operator>(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hgt(x, y);
 }
+
+__forceinline__ __device__ bool operator>=(__nv_bfloat16 x, __nv_bfloat16 y) {
+  return bf16hgt(x, y) || x == y;
+}
+
 __forceinline__ __device__ bool operator<(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hlt(x, y);
 }
+
+__forceinline__ __device__ bool operator<=(__nv_bfloat16 x, __nv_bfloat16 y) {
+  return bf16hlt(x, y) || x == y;
+}
+
 #endif // __CUDA_ARCH__ < 800
+
 template <typename T>
 __forceinline__ __device__ bool operator>(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) < static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator<(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) > static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator==(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) == static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator!=(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) != static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator>(__half x, T y) {
   return __half2float(x) < static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator<(__half x, T y) {
   return __half2float(x) > static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator==(__half x, T y) {
   return __half2float(x) == static_cast<float>(y);
 }
+
 template <typename T>
 __forceinline__ __device__ bool operator!=(__half x, T y) {
   return __half2float(x) != static_cast<float>(y);

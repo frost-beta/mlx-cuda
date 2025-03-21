@@ -52,20 +52,6 @@ operator%(const cuDoubleComplex& a, const cuDoubleComplex& b) {
   return make_cuDoubleComplex(r, i);
 }
 
-__forceinline__ __host__ __device__ bool operator>(
-    const cuDoubleComplex& a,
-    const cuDoubleComplex& b) {
-  double mag_a = sqrt(cuCreal(a) * cuCreal(a) + cuCimag(a) * cuCimag(a));
-  double mag_b = sqrt(cuCreal(b) * cuCreal(b) + cuCimag(b) * cuCimag(b));
-  return mag_a > mag_b;
-}
-
-__forceinline__ __host__ __device__ bool operator<(
-    const cuDoubleComplex& a,
-    const cuDoubleComplex& b) {
-  return b > a;
-}
-
 __forceinline__ __host__ __device__ bool operator==(
     const cuDoubleComplex& a,
     const cuDoubleComplex& b) {
@@ -76,6 +62,32 @@ __forceinline__ __host__ __device__ bool operator!=(
     const cuDoubleComplex& a,
     const cuDoubleComplex& b) {
   return !(a == b);
+}
+
+__forceinline__ __host__ __device__ bool operator>(
+    const cuDoubleComplex& a,
+    const cuDoubleComplex& b) {
+  double mag_a = sqrt(cuCreal(a) * cuCreal(a) + cuCimag(a) * cuCimag(a));
+  double mag_b = sqrt(cuCreal(b) * cuCreal(b) + cuCimag(b) * cuCimag(b));
+  return mag_a > mag_b;
+}
+
+__forceinline__ __host__ __device__ bool operator>=(
+    const cuDoubleComplex& a,
+    const cuDoubleComplex& b) {
+  return a > b || a == b;
+}
+
+__forceinline__ __host__ __device__ bool operator<(
+    const cuDoubleComplex& a,
+    const cuDoubleComplex& b) {
+  return b > a;
+}
+
+__forceinline__ __host__ __device__ bool operator<=(
+    const cuDoubleComplex& a,
+    const cuDoubleComplex& b) {
+  return b > a || a == b;
 }
 
 __forceinline__ __host__ __device__ cuDoubleComplex
@@ -147,20 +159,6 @@ operator%(const cuFloatComplex& a, const cuFloatComplex& b) {
   return make_cuFloatComplex(r, i);
 }
 
-__forceinline__ __host__ __device__ bool operator>(
-    const cuFloatComplex& a,
-    const cuFloatComplex& b) {
-  float mag_a = sqrt(cuCrealf(a) * cuCrealf(a) + cuCimagf(a) * cuCimagf(a));
-  float mag_b = sqrt(cuCrealf(b) * cuCrealf(b) + cuCimagf(b) * cuCimagf(b));
-  return mag_a > mag_b;
-}
-
-__forceinline__ __host__ __device__ bool operator<(
-    const cuFloatComplex& a,
-    const cuFloatComplex& b) {
-  return b > a;
-}
-
 __forceinline__ __host__ __device__ bool operator==(
     const cuFloatComplex& a,
     const cuFloatComplex& b) {
@@ -171,6 +169,32 @@ __forceinline__ __host__ __device__ bool operator!=(
     const cuFloatComplex& a,
     const cuFloatComplex& b) {
   return !(a == b);
+}
+
+__forceinline__ __host__ __device__ bool operator>(
+    const cuFloatComplex& a,
+    const cuFloatComplex& b) {
+  float mag_a = sqrt(cuCrealf(a) * cuCrealf(a) + cuCimagf(a) * cuCimagf(a));
+  float mag_b = sqrt(cuCrealf(b) * cuCrealf(b) + cuCimagf(b) * cuCimagf(b));
+  return mag_a > mag_b;
+}
+
+__forceinline__ __host__ __device__ bool operator>=(
+    const cuFloatComplex& a,
+    const cuFloatComplex& b) {
+  return a > b || a == b;
+}
+
+__forceinline__ __host__ __device__ bool operator<(
+    const cuFloatComplex& a,
+    const cuFloatComplex& b) {
+  return b > a;
+}
+
+__forceinline__ __host__ __device__ bool operator<=(
+    const cuFloatComplex& a,
+    const cuFloatComplex& b) {
+  return b > a || a == b;
 }
 
 __forceinline__ __host__ __device__ cuFloatComplex

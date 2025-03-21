@@ -31,11 +31,19 @@ constexpr bool is_supported_binary_op() {
   if (std::is_same_v<Op, mxcuda::Add> || std::is_same_v<Op, mxcuda::Divide> ||
       std::is_same_v<Op, mxcuda::Maximum> ||
       std::is_same_v<Op, mxcuda::Minimum> ||
+      std::is_same_v<Op, mxcuda::Multiply> ||
       std::is_same_v<Op, mxcuda::Subtract> ||
       std::is_same_v<Op, mxcuda::Power> ||
-      std::is_same_v<Op, mxcuda::Remainder> ||
       std::is_same_v<Op, mxcuda::Remainder>) {
     return std::is_same_v<In, Out>;
+  }
+  if (std::is_same_v<Op, mxcuda::Equal> ||
+      std::is_same_v<Op, mxcuda::Greater> ||
+      std::is_same_v<Op, mxcuda::GreaterEqual> ||
+      std::is_same_v<Op, mxcuda::Less> ||
+      std::is_same_v<Op, mxcuda::LessEqual> ||
+      std::is_same_v<Op, mxcuda::NotEqual>) {
+    return std::is_same_v<Out, bool>;
   }
   return false;
 }
