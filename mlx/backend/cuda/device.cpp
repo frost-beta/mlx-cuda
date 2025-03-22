@@ -72,7 +72,10 @@ CommandEncoder& get_command_encoder(Stream stream) {
 
 namespace metal {
 
-void new_stream(Stream) {}
+void new_stream(Stream stream) {
+  // Ensure the static stream objects are created.
+  mxcuda::get_command_encoder(stream);
+}
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&
 device_info() {
