@@ -1901,13 +1901,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 x = mx.cumsum(x)
             return x
 
-        mx.synchronize(mx.default_stream(mx.default_device()))
+        mx.synchronize()
         mx.eval(fn(2))
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        mem2 = mx.metal.get_peak_memory()
+        mx.synchronize()
+        mem2 = mx.get_peak_memory()
         mx.eval(fn(4))
-        mx.synchronize(mx.default_stream(mx.default_device()))
-        mem4 = mx.metal.get_peak_memory()
+        mx.synchronize()
+        mem4 = mx.get_peak_memory()
         self.assertEqual(mem2, mem4)
 
     def test_squeeze_expand(self):

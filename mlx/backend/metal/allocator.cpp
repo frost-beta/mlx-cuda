@@ -3,6 +3,7 @@
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/backend/metal/resident.h"
+#include "mlx/memory.h"
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>
@@ -192,15 +193,18 @@ size_t MetalAllocator::set_cache_limit(size_t limit) {
   return limit;
 };
 
-size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
+size_t MetalAllocator::set_memory_limit(size_t limit) {
   std::unique_lock lk(mutex_);
   std::swap(limit, block_limit_);
-  relaxed_ = relaxed;
   gc_limit_ = std::min(
       block_limit_,
       static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()));
   return limit;
 };
+
+size_t MetalAllocator::get_memory_limit() {
+  return block_limit_;
+}
 
 size_t MetalAllocator::set_wired_limit(size_t limit) {
   std::unique_lock lk(mutex_);
@@ -209,7 +213,7 @@ size_t MetalAllocator::set_wired_limit(size_t limit) {
   return limit;
 };
 
-Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
+Buffer MetalAllocator::malloc(size_t size) {
   // Metal doesn't like empty buffers
   if (size == 0) {
     return Buffer{nullptr};
@@ -235,11 +239,6 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     size_t mem_required = get_active_memory() + get_cache_memory() + size;
-
-    // If there is too much memory pressure, fail (likely causes a wait).
-    if (!(allow_swap && relaxed_) && mem_required >= block_limit_) {
-      return Buffer{nullptr};
-    }
 
     auto pool = metal::new_scoped_memory_pool();
 
@@ -325,37 +324,40 @@ MetalAllocator& allocator() {
   return *allocator_;
 }
 
+} // namespace metal
+
 size_t set_cache_limit(size_t limit) {
-  return allocator().set_cache_limit(limit);
+  return metal::allocator().set_cache_limit(limit);
 }
-size_t set_memory_limit(size_t limit, bool relaxed /* = true */) {
-  return allocator().set_memory_limit(limit, relaxed);
+size_t set_memory_limit(size_t limit) {
+  return metal::allocator().set_memory_limit(limit);
+}
+size_t get_memory_limit() {
+  return metal::allocator().get_memory_limit();
 }
 size_t set_wired_limit(size_t limit) {
-  if (limit >
-      std::get<size_t>(device_info().at("max_recommended_working_set_size"))) {
+  if (limit > std::get<size_t>(metal::device_info().at(
+                  "max_recommended_working_set_size"))) {
     throw std::invalid_argument(
         "[metal::set_wired_limit] Setting a wired limit larger than "
         "the maximum working set size is not allowed.");
   }
-  return allocator().set_wired_limit(limit);
+  return metal::allocator().set_wired_limit(limit);
 }
 size_t get_active_memory() {
-  return allocator().get_active_memory();
+  return metal::allocator().get_active_memory();
 }
 size_t get_peak_memory() {
-  return allocator().get_peak_memory();
+  return metal::allocator().get_peak_memory();
 }
 void reset_peak_memory() {
-  allocator().reset_peak_memory();
+  metal::allocator().reset_peak_memory();
 }
 size_t get_cache_memory() {
-  return allocator().get_cache_memory();
+  return metal::allocator().get_cache_memory();
 }
 void clear_cache() {
-  return allocator().clear_cache();
+  return metal::allocator().clear_cache();
 }
-
-} // namespace metal
 
 } // namespace mlx::core

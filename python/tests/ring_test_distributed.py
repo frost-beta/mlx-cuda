@@ -3,10 +3,10 @@
 import unittest
 
 import mlx.core as mx
-import mlx_tests
+import mlx_distributed_tests
 
 
-class TestRingDistributed(mlx_tests.MLXTestCase):
+class TestRingDistributed(mlx_distributed_tests.MLXDistributedCommonTestCase):
     @classmethod
     def setUpClass(cls):
         world = mx.distributed.init(strict=True, backend="ring")
@@ -55,6 +55,24 @@ class TestRingDistributed(mlx_tests.MLXTestCase):
                 )  # to ensure that we don't sum to int32
                 maxrelerror = ((y - z).abs() / z.abs()).max()
                 self.assertLessEqual(maxrelerror, rtol)
+
+    def test_all_gather(self):
+        world = mx.distributed.init()
+        dtypes = [
+            mx.int8,
+            mx.uint8,
+            mx.int16,
+            mx.uint16,
+            mx.int32,
+            mx.uint32,
+            mx.float32,
+            mx.complex64,
+        ]
+        for dt in dtypes:
+            x = mx.ones((2, 2, 4), dtype=dt)
+            y = mx.distributed.all_gather(x)
+            self.assertEqual(y.shape, (world.size() * 2, 2, 4))
+            self.assertTrue(mx.all(y == 1))
 
     def test_send_recv(self):
         world = mx.distributed.init()
