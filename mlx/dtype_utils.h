@@ -57,10 +57,10 @@ const char* dtype_to_string(Dtype arg);
 template <Dtype::Val N>
 struct DtypeToCppType;
 
-#define SPECIALIZE_DtypeToCppType(cpp_type, dtype) \
+#define SPECIALIZE_DtypeToCppType(CPP_TYPE, DTYPE) \
   template <>                                      \
-  struct DtypeToCppType<Dtype::Val::dtype> {       \
-    using type = cpp_type;                         \
+  struct DtypeToCppType<Dtype::Val::DTYPE> {       \
+    using type = CPP_TYPE;                         \
   };
 
 MLX_FORALL_DTYPES(SPECIALIZE_DtypeToCppType)
@@ -71,10 +71,10 @@ MLX_FORALL_DTYPES(SPECIALIZE_DtypeToCppType)
 template <typename T>
 struct CppTypeToDtype;
 
-#define SPECIALIZE_CppTypeToDtype(cpp_type, dtype) \
+#define SPECIALIZE_CppTypeToDtype(CPP_TYPE, DTYPE) \
   template <>                                      \
-  struct CppTypeToDtype<cpp_type>                  \
-      : std::integral_constant<Dtype::Val, Dtype::Val::dtype> {};
+  struct CppTypeToDtype<CPP_TYPE>                  \
+      : std::integral_constant<Dtype::Val, Dtype::Val::DTYPE> {};
 
 MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
 

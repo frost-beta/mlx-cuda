@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/distributed/primitives.h"
+#include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"

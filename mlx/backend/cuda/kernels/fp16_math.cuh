@@ -3,9 +3,23 @@
 #pragma once
 
 #include <cuda_fp16.h>
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace mlx::core::mxcuda {
+
+template <typename T>
+constexpr T negative_infinite() {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    uint16_t value = 0xFC00;
+    return __builtin_bit_cast(__half, value);
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    uint16_t value = 0xFF80;
+    return __builtin_bit_cast(__nv_bfloat16, value);
+  } else {
+    return -cuda::std::numeric_limits<T>::infinity();
+  }
+}
 
 template <typename T>
 __forceinline__ __device__ bool isnan(T x) {

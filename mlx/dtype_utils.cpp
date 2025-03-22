@@ -5,9 +5,9 @@
 namespace mlx::core {
 
 const char* dtype_to_string(Dtype arg) {
-#define SPECIALIZE_DtypeToString(cpp_type, dtype) \
-  if (dtype == arg) {                             \
-    return #dtype;                                \
+#define SPECIALIZE_DtypeToString(CPP_TYPE, DTYPE) \
+  if (DTYPE == arg) {                             \
+    return #DTYPE;                                \
   }
   MLX_FORALL_DTYPES(SPECIALIZE_DtypeToString)
 #undef SPECIALIZE_DtypeToString
