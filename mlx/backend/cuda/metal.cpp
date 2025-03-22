@@ -18,6 +18,8 @@ void stop_capture() {}
 void eval(array& arr) {
   auto s = arr.primitive().stream();
 
+  // TODO: Prefetch memory of inputs and outputs.
+
   auto outputs = arr.outputs();
   {
     // If the array is a tracer hold a reference

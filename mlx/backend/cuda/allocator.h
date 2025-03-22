@@ -4,6 +4,8 @@
 
 #include "mlx/allocator.h"
 
+#include <mutex>
+
 namespace mlx::core::mxcuda {
 
 using allocator::Buffer;
@@ -16,13 +18,37 @@ struct CudaBuffer {
 
 class CudaAllocator : public allocator::Allocator {
  public:
-  Buffer malloc(size_t size, bool allow_swap) override;
+  Buffer malloc(size_t size) override;
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;
 
+  size_t get_active_memory() const {
+    return active_memory_;
+  };
+  size_t get_peak_memory() const {
+    return peak_memory_;
+  };
+  void reset_peak_memory() {
+    std::unique_lock lk(mutex_);
+    peak_memory_ = 0;
+  };
+  size_t get_memory_limit() {
+    return memory_limit_;
+  }
+  size_t set_memory_limit(size_t limit) {
+    std::unique_lock lk(mutex_);
+    std::swap(memory_limit_, limit);
+    return limit;
+  }
+
  private:
-  CudaAllocator() = default;
+  CudaAllocator();
   friend CudaAllocator& allocator();
+
+  std::mutex mutex_;
+  size_t memory_limit_;
+  size_t active_memory_{0};
+  size_t peak_memory_{0};
 };
 
 CudaAllocator& allocator();
