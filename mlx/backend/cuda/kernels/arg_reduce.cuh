@@ -82,9 +82,9 @@ template <typename T, typename Op, int N_READS = 4>
 __global__ void arg_reduce_general(
     const T* in,
     uint32_t* out,
-    const int* shape,
-    const int64_t* in_strides,
-    const int64_t* out_strides,
+    const __grid_constant__ Shape shape,
+    const __grid_constant__ Strides in_strides,
+    const __grid_constant__ Strides out_strides,
     size_t ndim,
     int64_t axis_stride,
     size_t axis_size) {
@@ -108,8 +108,9 @@ __global__ void arg_reduce_general(
 
   // Compute the input/output index. There is one beginning and one output for
   // the whole threadgroup.
-  auto in_idx = elem_to_loc(blockIdx.x, shape, in_strides, ndim);
-  auto out_idx = elem_to_loc(blockIdx.x, shape, out_strides, ndim);
+  auto in_idx = elem_to_loc(blockIdx.x, shape.data(), in_strides.data(), ndim);
+  auto out_idx =
+      elem_to_loc(blockIdx.x, shape.data(), out_strides.data(), ndim);
 
   IndexValPair<T> best{0, Op::init};
 

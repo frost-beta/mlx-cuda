@@ -62,9 +62,9 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
                 <<<out.data_size(), block_dim, 0, stream>>>(
                     in.data<CTYPE>(),
                     out.data<uint32_t>(),
-                    shape.data(),
-                    in_strides.data(),
-                    out_strides.data(),
+                    mxcuda::const_param(shape),
+                    mxcuda::const_param(in_strides),
+                    mxcuda::const_param(out_strides),
                     ndim,
                     axis_stride,
                     axis_size);
@@ -74,9 +74,9 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
                 <<<out.data_size(), block_dim, 0, stream>>>(
                     in.data<CTYPE>(),
                     out.data<uint32_t>(),
-                    shape.data(),
-                    in_strides.data(),
-                    out_strides.data(),
+                    mxcuda::const_param(shape),
+                    mxcuda::const_param(in_strides),
+                    mxcuda::const_param(out_strides),
                     ndim,
                     axis_stride,
                     axis_size);

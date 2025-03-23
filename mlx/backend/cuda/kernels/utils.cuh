@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/kernels/fp16_math.cuh"
 
 #include <cuComplex.h>
+#include <cuda/std/array>
 #include <cuda/std/limits>
 
 namespace mlx::core::mxcuda {
@@ -23,6 +24,30 @@ namespace mlx::core::mxcuda {
 template <typename T, typename U>
 __forceinline__ __host__ __device__ auto ceil_div(T a, U b) {
   return (a + (b - 1)) / b;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// Kernel parameter utils
+///////////////////////////////////////////////////////////////////////////////
+
+// When passing shape/strides to kernels, to pass them via constant memory we
+// have to know their size at compile time. We define a maximum dim used for
+// reserving memory.
+#define MAX_NDIM 8
+
+// Kernels should use below types for shape and strides parameters.
+using Shape = cuda::std::array<int32_t, MAX_NDIM>;
+using Strides = cuda::std::array<int64_t, MAX_NDIM>;
+
+// Utility to copy data from vector to array in host.
+template <typename T>
+inline cuda::std::array<T, MAX_NDIM> const_param(const std::vector<T>& vec) {
+  if (vec.size() > MAX_NDIM) {
+    throw std::runtime_error("ndim can not be larger than 8.");
+  }
+  cuda::std::array<T, MAX_NDIM> result;
+  std::copy_n(vec.begin(), vec.size(), result.begin());
+  return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
