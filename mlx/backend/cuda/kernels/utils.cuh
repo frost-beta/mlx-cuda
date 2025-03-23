@@ -16,6 +16,8 @@ namespace mlx::core::mxcuda {
 
 // The maximum maxThreadsPerBlock value. Some code use it to define the size of
 // shared memory.
+// TODO: Kernels ported from Metal assume this number to be <= 1024, we should
+// figure out if this number could be larger in CUDA.
 #define MAX_BLOCK_DIM 1024
 
 template <typename T, typename U>

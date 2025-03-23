@@ -36,6 +36,10 @@ class DeviceStream {
   // Run the function in host after last launched work finishes.
   void add_host_callback(std::function<void()> func);
 
+  const Device& device() const {
+    return device_;
+  }
+
  private:
   Device device_;
   cudaStream_t stream_;
@@ -59,8 +63,12 @@ class CommandEncoder {
 
   template <class F>
   void launch_kernel(F&& fun) {
-    fun(stream_.schedule_cuda_stream());
-    stream_.add_host_callback([temporaries = std::move(temporaries_)]() {});
+    launch_kernel_with(std::forward<F>(fun), stream_.schedule_cuda_stream());
+  }
+
+  template <class F>
+  void launch_kernel_sequencially(F&& fun) {
+    launch_kernel_with(std::forward<F>(fun), stream_.last_cuda_stream());
   }
 
   DeviceStream& stream() {
@@ -68,6 +76,16 @@ class CommandEncoder {
   }
 
  private:
+  template <class F>
+  void launch_kernel_with(F&& fun, cudaStream_t stream) {
+    set_cuda_device(stream_.device());
+    fun(stream);
+    check_cuda_error("kernel launch", cudaGetLastError());
+    if (!temporaries_.empty()) {
+      stream_.add_host_callback([temporaries = std::move(temporaries_)]() {});
+    }
+  }
+
   DeviceStream stream_;
   std::vector<array> temporaries_;
 };

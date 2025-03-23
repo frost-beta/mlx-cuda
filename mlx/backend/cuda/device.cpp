@@ -35,7 +35,6 @@ DeviceStream::~DeviceStream() {
 }
 
 cudaStream_t DeviceStream::schedule_cuda_stream() {
-  set_cuda_device(device_);
   // TODO: Return a stream that maximizes parallelism.
   return stream_;
 }

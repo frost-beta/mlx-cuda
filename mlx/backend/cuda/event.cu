@@ -66,10 +66,11 @@ void Event::wait(Stream stream) {
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [this]() mutable { wait(); });
   } else {
-    mxcuda::get_command_encoder(stream).launch_kernel([this](cudaStream_t s) {
-      auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
-      event_wait_kernel<<<1, 1, 0, s>>>(ac, value());
-    });
+    mxcuda::get_command_encoder(stream).launch_kernel_sequencially(
+        [this](cudaStream_t s) {
+          auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
+          event_wait_kernel<<<1, 1, 0, s>>>(ac, value());
+        });
   }
 }
 
@@ -77,10 +78,11 @@ void Event::signal(Stream stream) {
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [this]() mutable { signal(); });
   } else {
-    mxcuda::get_command_encoder(stream).launch_kernel([this](cudaStream_t s) {
-      auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
-      event_signal_kernel<<<1, 1, 0, s>>>(ac, value());
-    });
+    mxcuda::get_command_encoder(stream).launch_kernel_sequencially(
+        [this](cudaStream_t s) {
+          auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
+          event_signal_kernel<<<1, 1, 0, s>>>(ac, value());
+        });
   }
 }
 
