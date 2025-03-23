@@ -9,11 +9,6 @@
 
 namespace mlx::core {
 
-template <typename T, typename U>
-inline auto ceil_div(T a, U b) {
-  return (a + (b - 1)) / b;
-}
-
 dim3 get_2d_num_blocks(
     const Shape& shape,
     const Strides& strides,

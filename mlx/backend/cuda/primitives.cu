@@ -1,10 +1,13 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/distributed/primitives.h"
+#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/metal/copy.h"
+#include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
+
+#include <assert.h>
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
@@ -18,6 +21,75 @@
   }
 
 namespace mlx::core {
+
+void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto& s = stream();
+
+  // Prepare the shapes, strides and axis arguments.
+  auto in_strides = in.strides();
+  auto shape = in.shape();
+  auto out_strides = out.strides();
+  auto axis_stride = in_strides[axis_];
+  size_t axis_size = shape[axis_];
+  if (out_strides.size() == in_strides.size()) {
+    out_strides.erase(out_strides.begin() + axis_);
+  }
+  in_strides.erase(in_strides.begin() + axis_);
+  shape.erase(shape.begin() + axis_);
+  size_t ndim = shape.size();
+
+  // ArgReduce
+  constexpr int n_reads = 4;
+  auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  encoder.launch_kernel([&](cudaStream_t stream) {
+    MLX_SWITCH_CUDA_TYPES(in.dtype(), CTYPE, [&]() {
+      if constexpr (!std::is_same_v<CTYPE, cuComplex>) {
+        size_t max_threads_per_block = mxcuda::max_threads_per_block(s.device);
+        size_t block_dim = std::min(
+            mxcuda::ceil_div(axis_size, n_reads), max_threads_per_block);
+        // Round up to the closest number divisible by warp size.
+        block_dim = mxcuda::ceil_div(block_dim, WARP_SIZE) * WARP_SIZE;
+        assert(block_dim <= max_threads_per_block);
+
+        switch (reduce_type_) {
+          case ArgReduce::ArgMax:
+            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMax<CTYPE>>
+                <<<out.data_size(), block_dim, 0, stream>>>(
+                    in.data<CTYPE>(),
+                    out.data<uint32_t>(),
+                    shape.data(),
+                    in_strides.data(),
+                    out_strides.data(),
+                    ndim,
+                    axis_stride,
+                    axis_size);
+            break;
+          case ArgReduce::ArgMin:
+            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMin<CTYPE>>
+                <<<out.data_size(), block_dim, 0, stream>>>(
+                    in.data<CTYPE>(),
+                    out.data<uint32_t>(),
+                    shape.data(),
+                    in_strides.data(),
+                    out_strides.data(),
+                    ndim,
+                    axis_stride,
+                    axis_size);
+            break;
+        }
+      } else {
+        throw std::runtime_error(fmt::format(
+            "Can not arg reduce input with dtype {}",
+            dtype_to_string(in.dtype())));
+      }
+    });
+  });
+}
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
@@ -54,7 +126,6 @@ NO_GPU(ArcSinh)
 NO_GPU(ArcTan)
 NO_GPU(ArcTanh)
 NO_GPU(ArgPartition)
-NO_GPU(ArgReduce)
 NO_GPU(ArgSort)
 NO_GPU(AsType)
 NO_GPU(BitwiseInvert)
