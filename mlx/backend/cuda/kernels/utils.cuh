@@ -22,7 +22,7 @@ namespace mlx::core::mxcuda {
 #define MAX_BLOCK_DIM 1024
 
 template <typename T, typename U>
-__forceinline__ __host__ __device__ auto ceil_div(T a, U b) {
+inline __host__ __device__ auto ceil_div(T a, U b) {
   return (a + (b - 1)) / b;
 }
 
@@ -102,7 +102,7 @@ MLX_FORALL_CUDA_FLOAT_TYPES(SPECIALIZE_FloatLimits)
 // Single Array with generic dims
 
 template <typename IdxT = int64_t>
-__forceinline__ __host__ __device__ IdxT
+inline __host__ __device__ IdxT
 elem_to_loc(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
   IdxT loc = 0;
   for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
@@ -114,7 +114,7 @@ elem_to_loc(IdxT elem, const int* shape, const int64_t* strides, int ndim) {
 
 // Non templated version to handle arbitrary dims
 template <typename IdxT = int64_t>
-__forceinline__ __host__ __device__ IdxT
+inline __host__ __device__ IdxT
 elem_to_loc(uint3 elem, const int* shape, const int64_t* strides, int ndim) {
   IdxT loc =
       elem.x * IdxT(strides[ndim - 1]) + elem.y * IdxT(strides[ndim - 2]);
@@ -129,19 +129,19 @@ elem_to_loc(uint3 elem, const int* shape, const int64_t* strides, int ndim) {
 // Single Array with fixed N dims
 
 template <typename IdxT = int64_t>
-__forceinline__ __host__ __device__ IdxT
+inline __host__ __device__ IdxT
 elem_to_loc_1(uint elem, int64_t stride) {
   return elem * IdxT(stride);
 }
 
 template <typename IdxT = int64_t>
-__forceinline__ __host__ __device__ IdxT
+inline __host__ __device__ IdxT
 elem_to_loc_2(uint2 elem, int64_t strides[2]) {
   return elem.x * IdxT(strides[1]) + elem.y * IdxT(strides[0]);
 }
 
 template <typename IdxT = int64_t>
-__forceinline__ __host__ __device__ IdxT
+inline __host__ __device__ IdxT
 elem_to_loc_3(uint3 elem, int64_t strides[3]) {
   return elem.x * IdxT(strides[2]) + elem.y * IdxT(strides[1]) +
       elem.z * IdxT(strides[0]);
