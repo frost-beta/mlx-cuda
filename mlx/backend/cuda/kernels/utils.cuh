@@ -26,6 +26,10 @@ inline __host__ __device__ auto ceil_div(T a, U b) {
   return (a + (b - 1)) / b;
 }
 
+inline __host__ __device__ dim3 ceil_div(dim3 a, dim3 b) {
+  return {ceil_div(a.x, b.x), ceil_div(a.y, b.y), ceil_div(a.z, b.z)};
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Kernel parameter utils
 ///////////////////////////////////////////////////////////////////////////////
@@ -129,20 +133,17 @@ elem_to_loc(uint3 elem, const int* shape, const int64_t* strides, int ndim) {
 // Single Array with fixed N dims
 
 template <typename IdxT = int64_t>
-inline __host__ __device__ IdxT
-elem_to_loc_1(uint elem, int64_t stride) {
+inline __host__ __device__ IdxT elem_to_loc_1(uint elem, int64_t stride) {
   return elem * IdxT(stride);
 }
 
 template <typename IdxT = int64_t>
-inline __host__ __device__ IdxT
-elem_to_loc_2(uint2 elem, int64_t strides[2]) {
+inline __host__ __device__ IdxT elem_to_loc_2(uint2 elem, int64_t strides[2]) {
   return elem.x * IdxT(strides[1]) + elem.y * IdxT(strides[0]);
 }
 
 template <typename IdxT = int64_t>
-inline __host__ __device__ IdxT
-elem_to_loc_3(uint3 elem, int64_t strides[3]) {
+inline __host__ __device__ IdxT elem_to_loc_3(uint3 elem, int64_t strides[3]) {
   return elem.x * IdxT(strides[2]) + elem.y * IdxT(strides[1]) +
       elem.z * IdxT(strides[0]);
 }

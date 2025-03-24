@@ -1,7 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernels/arg_reduce.cuh"
+#include "mlx/backend/cuda/kernels/random.cuh"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
@@ -21,6 +23,29 @@
   }
 
 namespace mlx::core {
+
+namespace {
+
+void reshape(const array& in, array& out, Stream s) {
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+  if (copy_necessary) {
+    out.set_data(allocator::malloc(out.nbytes()));
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        make_contiguous_strides(in.shape()),
+        0,
+        0,
+        CopyType::General,
+        s);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
+  }
+}
+
+} // namespace
 
 void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
@@ -95,6 +120,12 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
+  CopyType ctype =
+      inputs[0].flags().contiguous ? CopyType::Vector : CopyType::General;
+  copy_gpu(inputs[0], out, ctype);
+}
+
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
@@ -116,6 +147,69 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   copy_gpu(in, out, ctype);
 }
 
+void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
+void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+
+  // keys has shape (N1, ..., NK, 2)
+  // out has shape (N1, ..., NK, M1, M2, ...)
+  auto& keys = inputs[0];
+  size_t num_keys = keys.size() / 2;
+
+  size_t elems_per_key = out.size() / num_keys;
+  size_t bytes_per_key = out.itemsize() * elems_per_key;
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+
+  size_t out_per_key = (bytes_per_key + 4 - 1) / 4;
+  size_t half_size = out_per_key / 2;
+  bool odd = out_per_key % 2;
+
+  auto& s = stream();
+  auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_input_array(keys);
+  encoder.set_output_array(out);
+  encoder.launch_kernel([&](cudaStream_t stream) {
+    dim3 total_threads{
+        static_cast<uint32_t>(num_keys),
+        static_cast<uint32_t>(half_size + odd)};
+    dim3 block_dim = get_block_dim(total_threads);
+    dim3 grid_dim = mxcuda::ceil_div(total_threads, block_dim);
+    if (keys.flags().row_contiguous) {
+      mxcuda::rbitsc<<<grid_dim, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(), out.data<uint8_t>(), odd, bytes_per_key);
+    } else {
+      mxcuda::rbits<<<grid_dim, block_dim, 0, stream>>>(
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          odd,
+          bytes_per_key,
+          keys.ndim(),
+          mxcuda::const_param(keys.shape()),
+          mxcuda::const_param(keys.strides()));
+    }
+  });
+}
+
+void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
+void Split::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
+void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
 NO_GPU(Abs)
 NO_GPU(AddMM)
 NO_GPU(Arange)
@@ -127,7 +221,6 @@ NO_GPU(ArcTan)
 NO_GPU(ArcTanh)
 NO_GPU(ArgPartition)
 NO_GPU(ArgSort)
-NO_GPU(AsType)
 NO_GPU(BitwiseInvert)
 NO_GPU(BlockMaskedMM)
 NO_GPU(Ceil)
@@ -151,7 +244,6 @@ NO_GPU(Exp)
 NO_GPU(ExpandDims)
 NO_GPU(Expm1)
 NO_GPU(FFT)
-NO_GPU(Flatten)
 NO_GPU(Floor)
 NO_GPU(Gather)
 NO_GPU(GatherAxis)
@@ -170,10 +262,8 @@ NO_GPU(Pad)
 NO_GPU(Partition)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
-NO_GPU(RandomBits)
 NO_GPU(Real)
 NO_GPU(Reduce)
-NO_GPU(Reshape)
 NO_GPU(Round)
 NO_GPU(Scan)
 NO_GPU(Scatter)
@@ -187,7 +277,6 @@ NO_GPU(Slice)
 NO_GPU(SliceUpdate)
 NO_GPU(Softmax)
 NO_GPU(Sort)
-NO_GPU_MULTI(Split)
 NO_GPU(Square)
 NO_GPU(Squeeze)
 NO_GPU(Sqrt)
@@ -196,7 +285,6 @@ NO_GPU_MULTI(SVD)
 NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
-NO_GPU(Unflatten)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)

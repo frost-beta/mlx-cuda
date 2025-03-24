@@ -7,7 +7,45 @@
 
 namespace mlx::core {
 
+void check_cuda_error(const char* name, cudaError_t err) {
+  if (err != cudaSuccess) {
+    throw std::runtime_error(
+        fmt::format("{} failed: {}", name, cudaGetErrorString(err)));
+  }
+}
+
 // TODO: The implementation is identical to meta/utils.cpp .
+dim3 get_block_dim(dim3 total_threads, int pow2) {
+  int pows[3] = {0, 0, 0};
+  int sum = 0;
+  while (true) {
+    int presum = sum;
+    // Check all the pows
+    if (total_threads.x >= (1 << (pows[0] + 1))) {
+      pows[0]++;
+      sum++;
+    }
+    if (sum == 10) {
+      break;
+    }
+    if (total_threads.y >= (1 << (pows[1] + 1))) {
+      pows[1]++;
+      sum++;
+    }
+    if (sum == 10) {
+      break;
+    }
+    if (total_threads.z >= (1 << (pows[2] + 1))) {
+      pows[2]++;
+      sum++;
+    }
+    if (sum == presum || sum == pow2) {
+      break;
+    }
+  }
+  return {1u << pows[0], 1u << pows[1], 1u << pows[2]};
+}
+
 dim3 get_2d_num_blocks(
     const Shape& shape,
     const Strides& strides,
@@ -47,21 +85,13 @@ dim3 get_2d_num_blocks(
   if (grid_y > grid_x) {
     std::swap(grid_x, grid_y);
   }
-  return dim3(static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
+  return {static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1};
 }
 
-// TODO: The implementation is identical to meta/utils.cpp .
 std::string get_primitive_string(Primitive* primitive) {
   std::ostringstream op_t;
   primitive->print(op_t);
   return op_t.str();
-}
-
-void check_cuda_error(const char* name, cudaError_t err) {
-  if (err != cudaSuccess) {
-    throw std::runtime_error(
-        fmt::format("{} failed: {}", name, cudaGetErrorString(err)));
-  }
 }
 
 } // namespace mlx::core
