@@ -3,6 +3,8 @@
 #include "mlx/backend/cuda/kernels/utils.cuh"
 
 #include <cooperative_groups.h>
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_reduce.cuh>
 
 namespace mlx::core::mxcuda {
 
@@ -18,7 +20,7 @@ template <typename U>
 struct ArgMin {
   static constexpr U init = Limits<U>::max;
 
-  __device__ IndexValPair<U> reduce(
+  __device__ IndexValPair<U> operator()(
       const IndexValPair<U>& best,
       const IndexValPair<U>& current) {
     if (best.val > current.val ||
@@ -32,7 +34,7 @@ struct ArgMin {
   template <int N>
   __device__ IndexValPair<U>
   reduce_many(IndexValPair<U> best, U* vals, uint32_t offset) {
-    for (int i = 0; i < N; i++) {
+    CUDA_UNROLL for (int i = 0; i < N; i++) {
       if (vals[i] < best.val) {
         best.val = vals[i];
         best.index = offset + i;
@@ -46,7 +48,7 @@ template <typename U>
 struct ArgMax {
   static constexpr U init = Limits<U>::min;
 
-  __device__ IndexValPair<U> reduce(
+  __device__ IndexValPair<U> operator()(
       const IndexValPair<U>& best,
       const IndexValPair<U>& current) {
     if (best.val < current.val ||
@@ -60,7 +62,7 @@ struct ArgMax {
   template <int N>
   __device__ IndexValPair<U>
   reduce_many(IndexValPair<U> best, U* vals, uint32_t offset) {
-    for (int i = 0; i < N; i++) {
+    CUDA_UNROLL for (int i = 0; i < N; i++) {
       if (vals[i] > best.val) {
         best.val = vals[i];
         best.index = offset + i;
@@ -78,7 +80,7 @@ inline __device__ IndexValPair<U> warp_shuffle_down(
   return {g.shfl_down(data.index, delta), g.shfl_down(data.val, delta)};
 }
 
-template <typename T, typename Op, int N_READS = 4>
+template <typename T, typename Op, int BLOCK_DIM, int N_READS = 4>
 __global__ void arg_reduce_general(
     const T* in,
     uint32_t* out,
@@ -92,16 +94,6 @@ __global__ void arg_reduce_general(
   // and stride are provided in axis_stride and axis_size.
   //
   // Note: in shape == out shape with this convention.
-  //
-  // The sketch of the kernel is as follows.
-  //    1. Launch prod(shape) * block.size() threads.
-  //    2. Loop ceildiv(axis_size / block.size()) times
-  //    3. Read input values
-  //    4. Reduce among them and go to 3
-  //    5. Reduce in each warp
-  //    6. Write in the shared memory
-  //    7. Reduce them across block
-  //    8. Write the output without need for atomic
   Op op;
 
   // Compute the input/output index. There is one beginning and one output for
@@ -111,8 +103,6 @@ __global__ void arg_reduce_general(
   auto out_idx = elem_to_loc(elem, shape.data(), out_strides.data(), ndim);
 
   IndexValPair<T> best{0, Op::init};
-
-  __shared__ IndexValPair<T> local_data[MAX_BLOCK_DIM / WARP_SIZE];
 
   // Loop over the reduction axis in N_READS * block.size() buckets.
   auto block = cg::this_thread_block();
@@ -133,32 +123,11 @@ __global__ void arg_reduce_general(
   // At this point we have reduced the axis into thread group best values so we
   // need to reduce across the thread group.
 
-  // First per warp reduction.
-  auto warp = cg::tiled_partition<WARP_SIZE>(block);
-  for (int delta = warp.size() / 2; delta > 0; delta /= 2) {
-    IndexValPair<T> neighbor = warp_shuffle_down(warp, best, delta);
-    best = op.reduce(best, neighbor);
-  }
+  typedef cub::BlockReduce<IndexValPair<T>, BLOCK_DIM> BlockReduceT;
+  __shared__ typename BlockReduceT::TempStorage temp;
 
-  // Write to the shared memory.
-  if (warp.thread_rank() == 0) {
-    local_data[warp.meta_group_rank()] = best;
-  }
-  block.sync();
-  if (warp.meta_group_rank() != 0) {
-    return;
-  }
+  best = BlockReduceT(temp).Reduce(best, op);
 
-  // Read the appropriate value from local data and perform one warp reduction.
-  if (warp.thread_rank() < warp.meta_group_size()) {
-    best = local_data[warp.thread_rank()];
-  }
-  for (int delta = warp.size() / 2; delta > 0; delta /= 2) {
-    IndexValPair<T> neighbor = warp_shuffle_down(warp, best, delta);
-    best = op.reduce(best, neighbor);
-  }
-
-  // Finally write the output.
   if (block.thread_rank() == 0) {
     out[out_idx] = best.index;
   }

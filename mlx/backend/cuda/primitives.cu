@@ -67,24 +67,16 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   size_t ndim = shape.size();
 
   // ArgReduce
-  constexpr int n_reads = 4;
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_CUDA_TYPES(in.dtype(), CTYPE, [&]() {
       if constexpr (!std::is_same_v<CTYPE, cuComplex>) {
-        size_t max_threads_per_block = mxcuda::max_threads_per_block(s.device);
-        size_t block_dim = std::min(
-            mxcuda::ceil_div(axis_size, n_reads), max_threads_per_block);
-        // Round up to the closest number divisible by warp size.
-        block_dim = mxcuda::ceil_div(block_dim, WARP_SIZE) * WARP_SIZE;
-        assert(block_dim <= max_threads_per_block);
-
         switch (reduce_type_) {
           case ArgReduce::ArgMax:
-            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMax<CTYPE>>
-                <<<out.data_size(), block_dim, 0, stream>>>(
+            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMax<CTYPE>, 128>
+                <<<out.data_size(), 128, 0, stream>>>(
                     in.data<CTYPE>(),
                     out.data<uint32_t>(),
                     mxcuda::const_param(shape),
@@ -95,8 +87,8 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
                     axis_size);
             break;
           case ArgReduce::ArgMin:
-            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMin<CTYPE>>
-                <<<out.data_size(), block_dim, 0, stream>>>(
+            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMin<CTYPE>, 128>
+                <<<out.data_size(), 128, 0, stream>>>(
                     in.data<CTYPE>(),
                     out.data<uint32_t>(),
                     mxcuda::const_param(shape),
@@ -179,12 +171,12 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         static_cast<uint32_t>(num_keys),
         static_cast<uint32_t>(half_size + odd)};
     dim3 block_dim = get_block_dim(total_threads);
-    dim3 grid_dim = mxcuda::ceil_div(total_threads, block_dim);
+    dim3 num_blocks = mxcuda::ceil_div(total_threads, block_dim);
     if (keys.flags().row_contiguous) {
-      mxcuda::rbitsc<<<grid_dim, block_dim, 0, stream>>>(
+      mxcuda::rbitsc<<<num_blocks, block_dim, 0, stream>>>(
           keys.data<uint32_t>(), out.data<uint8_t>(), odd, bytes_per_key);
     } else {
-      mxcuda::rbits<<<grid_dim, block_dim, 0, stream>>>(
+      mxcuda::rbits<<<num_blocks, block_dim, 0, stream>>>(
           keys.data<uint32_t>(),
           out.data<uint8_t>(),
           odd,

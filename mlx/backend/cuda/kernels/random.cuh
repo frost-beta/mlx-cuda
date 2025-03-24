@@ -86,7 +86,8 @@ __global__ void rbits(
 
   auto kidx = 2 * index.x;
   auto k1_elem = elem_to_loc(kidx, key_shape.data(), key_strides.data(), ndim);
-  auto k2_elem = elem_to_loc(kidx + 1, key_shape.data(), key_strides.data(), ndim);
+  auto k2_elem =
+      elem_to_loc(kidx + 1, key_shape.data(), key_strides.data(), ndim);
   auto key = uint2{keys[k1_elem], keys[k2_elem]};
   auto half_size = grid_dim.y - odd;
   out += size_t(index.x) * bytes_per_key;

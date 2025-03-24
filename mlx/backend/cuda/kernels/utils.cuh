@@ -11,6 +11,8 @@
 
 namespace mlx::core::mxcuda {
 
+#define CUDA_UNROLL _Pragma("unroll")
+
 // All existing NVIDIA hardware has fixed 32 warp size. Though there is warpSize
 // built-in variable, using it would prevent compile-time optimizations.
 #define WARP_SIZE 32
