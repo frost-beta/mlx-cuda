@@ -165,6 +165,35 @@ void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  constexpr size_t extra_bytes = 16384;
+  if (in.buffer_size() <= out.nbytes() + extra_bytes &&
+      (in.flags().row_contiguous ||
+       (allow_col_major_ && in.flags().col_contiguous))) {
+    out.copy_shared_buffer(in);
+  } else {
+    copy_gpu(in, out, CopyType::General);
+  }
+}
+
+void CustomTransforms::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
+void Depends::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
+void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto in = inputs[0];
   CopyType ctype;
@@ -180,6 +209,10 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out, stream());
+}
+
+void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
 }
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -208,6 +241,37 @@ void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out, stream());
 }
 
+void View::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& in = inputs[0];
+  auto ibytes = size_of(in.dtype());
+  auto obytes = size_of(out.dtype());
+  // Conditions for buffer copying (disjunction):
+  // - type size is the same
+  // - type size is smaller and the last axis is contiguous
+  // - the entire array is row contiguous
+  if (ibytes == obytes || (obytes < ibytes && in.strides().back() == 1) ||
+      in.flags().row_contiguous) {
+    auto strides = in.strides();
+    for (int i = 0; i < static_cast<int>(strides.size()) - 1; ++i) {
+      strides[i] *= ibytes;
+      strides[i] /= obytes;
+    }
+    out.copy_shared_buffer(
+        in, strides, in.flags(), in.data_size() * ibytes / obytes);
+  } else {
+    auto tmp = array(in.shape(), in.dtype(), nullptr, {});
+    tmp.set_data(allocator::malloc(tmp.nbytes()));
+    copy_gpu_inplace(in, tmp, CopyType::General, stream());
+
+    auto flags = out.flags();
+    flags.contiguous = true;
+    flags.row_contiguous = true;
+    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
+    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
+    out.copy_shared_buffer(tmp, out.strides(), flags, out.size());
+  }
+}
+
 NO_GPU(Abs)
 NO_GPU(AddMM)
 NO_GPU(Arange)
@@ -225,21 +289,16 @@ NO_GPU(Ceil)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Concatenate)
 NO_GPU(Conjugate)
-NO_GPU(Contiguous)
 NO_GPU(Convolution)
 NO_GPU(Copy)
 NO_GPU(Cos)
 NO_GPU(Cosh)
-NO_GPU_MULTI(CustomTransforms)
-NO_GPU_MULTI(Depends)
 NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)
 NO_GPU(DynamicSliceUpdate)
-NO_GPU(NumberOfElements)
 NO_GPU(Erf)
 NO_GPU(ErfInv)
 NO_GPU(Exp)
-NO_GPU(ExpandDims)
 NO_GPU(Expm1)
 NO_GPU(FFT)
 NO_GPU(Floor)
@@ -282,7 +341,6 @@ NO_GPU(Tanh)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)
-NO_GPU(View)
 
 namespace fast {
 NO_GPU_MULTI(LayerNorm)
