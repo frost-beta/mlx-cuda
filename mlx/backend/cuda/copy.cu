@@ -71,17 +71,13 @@ void copy_gpu_inplace(
             dim3 num_blocks = large
                 ? get_2d_num_blocks(out.shape(), out.strides(), num_threads)
                 : dim3(ceil_div(out.data_size(), num_threads));
-            if (ctype == CopyType::Scalar) {
-              mxcuda::copy_s<<<num_blocks, num_threads, 0, stream>>>(
-                  input.data<CTYPE_IN>() + inp_offset,
-                  out.data<CTYPE_OUT>() + out_offset,
-                  out.data_size());
-            } else if (ctype == CopyType::Vector) {
-              mxcuda::copy_v<<<num_blocks, num_threads, 0, stream>>>(
-                  input.data<CTYPE_IN>() + inp_offset,
-                  out.data<CTYPE_OUT>() + out_offset,
-                  out.data_size());
-            }
+            auto kernel = ctype == CopyType::Scalar
+                ? &mxcuda::copy_s<CTYPE_IN, CTYPE_OUT>
+                : &mxcuda::copy_v<CTYPE_IN, CTYPE_OUT>;
+            kernel<<<num_blocks, num_threads, 0, stream>>>(
+                input.data<CTYPE_IN>() + inp_offset,
+                out.data<CTYPE_OUT>() + out_offset,
+                out.data_size());
           }
         } else {
           throw std::runtime_error(fmt::format(

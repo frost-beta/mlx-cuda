@@ -135,36 +135,26 @@ void binary_op_gpu_inplace(
             dim3 num_blocks = large
                 ? get_2d_num_blocks(out.shape(), out.strides(), num_threads)
                 : dim3(ceil_div(out.data_size(), num_threads));
+            decltype(&mxcuda::binary_ss<Op, InType, OutType>) kernel;
             switch (bopt) {
               case BinaryOpType::ScalarScalar:
-                mxcuda::binary_ss<Op><<<num_blocks, num_threads, 0, stream>>>(
-                    a.data<InType>(),
-                    b.data<InType>(),
-                    out.data<OutType>(),
-                    out.data_size());
+                kernel = &mxcuda::binary_ss<Op, InType, OutType>;
                 break;
               case BinaryOpType::ScalarVector:
-                mxcuda::binary_sv<Op><<<num_blocks, num_threads, 0, stream>>>(
-                    a.data<InType>(),
-                    b.data<InType>(),
-                    out.data<OutType>(),
-                    out.data_size());
+                kernel = &mxcuda::binary_sv<Op, InType, OutType>;
                 break;
               case BinaryOpType::VectorScalar:
-                mxcuda::binary_vs<Op><<<num_blocks, num_threads, 0, stream>>>(
-                    a.data<InType>(),
-                    b.data<InType>(),
-                    out.data<OutType>(),
-                    out.data_size());
+                kernel = &mxcuda::binary_vs<Op, InType, OutType>;
                 break;
               case BinaryOpType::VectorVector:
-                mxcuda::binary_vv<Op><<<num_blocks, num_threads, 0, stream>>>(
-                    a.data<InType>(),
-                    b.data<InType>(),
-                    out.data<OutType>(),
-                    out.data_size());
+                kernel = &mxcuda::binary_vv<Op, InType, OutType>;
                 break;
             }
+            kernel<<<num_blocks, num_threads, 0, stream>>>(
+                a.data<InType>(),
+                b.data<InType>(),
+                out.data<OutType>(),
+                out.data_size());
           }
         } else {
           throw std::runtime_error(fmt::format(
