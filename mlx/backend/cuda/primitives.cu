@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
@@ -14,12 +14,12 @@
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    throw std::runtime_error(#func " has no GPU implementation.");     \
+    throw std::runtime_error(#func " has no CUDA implementation.");     \
   }
 
 #define NO_GPU(func)                                                  \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    throw std::runtime_error(#func " has no GPU implementation.");    \
+    throw std::runtime_error(#func " has no CUDA implementation.");    \
   }
 
 namespace mlx::core {
@@ -101,41 +101,6 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
-void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
-}
-
-void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
-  CopyType ctype =
-      inputs[0].flags().contiguous ? CopyType::Vector : CopyType::General;
-  copy_gpu(inputs[0], out, ctype);
-}
-
-void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
-}
-
-void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
-}
-
-void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
-  auto in = inputs[0];
-  CopyType ctype;
-  if (in.data_size() == 1) {
-    ctype = CopyType::Scalar;
-  } else if (in.flags().contiguous) {
-    ctype = CopyType::Vector;
-  } else {
-    ctype = CopyType::General;
-  }
-  copy_gpu(in, out, ctype);
-}
-
-void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
-  reshape(inputs[0], out, stream());
-}
-
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
 
@@ -181,6 +146,42 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   });
 }
 
+// TODO: Code below are identical to backend/metal/primitives.cpp
+void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
+  CopyType ctype =
+      inputs[0].flags().contiguous ? CopyType::Vector : CopyType::General;
+  copy_gpu(inputs[0], out, ctype);
+}
+
+void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto in = inputs[0];
+  CopyType ctype;
+  if (in.data_size() == 1) {
+    ctype = CopyType::Scalar;
+  } else if (in.flags().contiguous) {
+    ctype = CopyType::Vector;
+  } else {
+    ctype = CopyType::General;
+  }
+  copy_gpu(in, out, ctype);
+}
+
+void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  reshape(inputs[0], out, stream());
+}
+
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   reshape(inputs[0], out, stream());
 }
@@ -189,6 +190,18 @@ void Split::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   eval(inputs, outputs);
+}
+
+void Squeeze::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
+void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
 }
 
 void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -248,7 +261,6 @@ NO_GPU(Partition)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
 NO_GPU(Real)
-NO_GPU(Reduce)
 NO_GPU(Round)
 NO_GPU(Scan)
 NO_GPU(Scatter)
@@ -263,13 +275,10 @@ NO_GPU(SliceUpdate)
 NO_GPU(Softmax)
 NO_GPU(Sort)
 NO_GPU(Square)
-NO_GPU(Squeeze)
 NO_GPU(Sqrt)
-NO_GPU(StopGradient)
 NO_GPU_MULTI(SVD)
 NO_GPU(Tan)
 NO_GPU(Tanh)
-NO_GPU(Transpose)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)
