@@ -1,5 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/cuda/kernels/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 
 #include <cooperative_groups.h>
@@ -33,7 +34,7 @@ struct ArgMin {
 
   template <int N>
   __device__ IndexValPair<U>
-  reduce_many(IndexValPair<U> best, U* vals, uint32_t offset) {
+  reduce_many(IndexValPair<U> best, U (&vals)[N], uint32_t offset) {
     CUDA_UNROLL for (int i = 0; i < N; i++) {
       if (vals[i] < best.val) {
         best.val = vals[i];
@@ -61,7 +62,7 @@ struct ArgMax {
 
   template <int N>
   __device__ IndexValPair<U>
-  reduce_many(IndexValPair<U> best, U* vals, uint32_t offset) {
+  reduce_many(IndexValPair<U> best, U (&vals)[N], uint32_t offset) {
     CUDA_UNROLL for (int i = 0; i < N; i++) {
       if (vals[i] > best.val) {
         best.val = vals[i];
@@ -104,24 +105,18 @@ __global__ void arg_reduce_general(
 
   IndexValPair<T> best{0, Op::init};
 
-  // Loop over the reduction axis in N_READS * block.size() buckets.
   auto block = cg::this_thread_block();
-  uint32_t block_size = N_READS * block.size();
-  for (uint32_t r = 0; r < ceil_div(axis_size, block_size); r++) {
-    // Read the current value.
-    uint32_t current_index = r * block_size + block.thread_rank() * N_READS;
-    uint32_t offset = current_index;
-    const T* current_in = in + in_idx + current_index * axis_stride;
+  for (uint32_t r = 0; r < ceil_div(axis_size, BLOCK_DIM * N_READS); r++) {
     T vals[N_READS];
-    for (int i = 0; i < N_READS; i++) {
-      vals[i] = (current_index < axis_size) ? *current_in : T(Op::init);
-      current_index++;
-      current_in += axis_stride;
-    }
-    best = op.template reduce_many<N_READS>(best, vals, offset);
+    auto index = r * BLOCK_DIM + block.thread_index().x;
+    cub::LoadDirectBlocked(
+        index,
+        make_strided_iterator(in + in_idx, axis_stride),
+        vals,
+        axis_size,
+        Op::init);
+    best = op.reduce_many(best, vals, index * N_READS);
   }
-  // At this point we have reduced the axis into thread group best values so we
-  // need to reduce across the thread group.
 
   typedef cub::BlockReduce<IndexValPair<T>, BLOCK_DIM> BlockReduceT;
   __shared__ typename BlockReduceT::TempStorage temp;
