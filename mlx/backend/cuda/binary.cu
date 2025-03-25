@@ -134,7 +134,7 @@ void binary_op_gpu_inplace(
                 out.data_size(), mxcuda::max_threads_per_block(s.device));
             dim3 num_blocks = large
                 ? get_2d_num_blocks(out.shape(), out.strides(), num_threads)
-                : dim3(mxcuda::ceil_div(out.data_size(), num_threads));
+                : dim3(ceil_div(out.data_size(), num_threads));
             switch (bopt) {
               case BinaryOpType::ScalarScalar:
                 mxcuda::binary_ss<Op><<<num_blocks, num_threads, 0, stream>>>(

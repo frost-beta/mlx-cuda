@@ -71,39 +71,32 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.set_input_array(in);
   encoder.set_output_array(out);
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_CUDA_TYPES(in.dtype(), CTYPE, [&]() {
-      if constexpr (!std::is_same_v<CTYPE, cuComplex>) {
-        switch (reduce_type_) {
-          case ArgReduce::ArgMax:
-            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMax<CTYPE>, 128>
-                <<<out.data_size(), 128, 0, stream>>>(
-                    in.data<CTYPE>(),
-                    out.data<uint32_t>(),
-                    mxcuda::const_param(shape),
-                    mxcuda::const_param(in_strides),
-                    mxcuda::const_param(out_strides),
-                    ndim,
-                    axis_stride,
-                    axis_size);
-            break;
-          case ArgReduce::ArgMin:
-            mxcuda::arg_reduce_general<CTYPE, mxcuda::ArgMin<CTYPE>, 128>
-                <<<out.data_size(), 128, 0, stream>>>(
-                    in.data<CTYPE>(),
-                    out.data<uint32_t>(),
-                    mxcuda::const_param(shape),
-                    mxcuda::const_param(in_strides),
-                    mxcuda::const_param(out_strides),
-                    ndim,
-                    axis_stride,
-                    axis_size);
-            break;
+    MLX_SWITCH_REAL_TYPES_CHECKED(in.dtype(), "ArgReduce", CTYPE, [&]() {
+      using InType = cuda_type_t<CTYPE>;
+      constexpr uint32_t N_READS = 4;
+      MLX_GET_BLOCK_DIM(ceil_div(axis_size, N_READS), BLOCK_DIM, {
+        auto kernel = &mxcuda::arg_reduce_general<
+            InType,
+            mxcuda::ArgMax<InType>,
+            BLOCK_DIM,
+            N_READS>;
+        if (reduce_type_ == ArgReduce::ArgMin) {
+          kernel = &mxcuda::arg_reduce_general<
+              InType,
+              mxcuda::ArgMin<InType>,
+              BLOCK_DIM,
+              N_READS>;
         }
-      } else {
-        throw std::runtime_error(fmt::format(
-            "Can not arg reduce input with dtype {}",
-            dtype_to_string(in.dtype())));
-      }
+        kernel<<<out.data_size(), BLOCK_DIM, 0, stream>>>(
+            in.data<InType>(),
+            out.data<uint32_t>(),
+            mxcuda::const_param(shape),
+            mxcuda::const_param(in_strides),
+            mxcuda::const_param(out_strides),
+            ndim,
+            axis_stride,
+            axis_size);
+      });
     });
   });
 }
@@ -171,7 +164,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         static_cast<uint32_t>(num_keys),
         static_cast<uint32_t>(half_size + odd)};
     dim3 block_dim = get_block_dim(total_threads);
-    dim3 num_blocks = mxcuda::ceil_div(total_threads, block_dim);
+    dim3 num_blocks = ceil_div(total_threads, block_dim);
     if (keys.flags().row_contiguous) {
       mxcuda::rbitsc<<<num_blocks, block_dim, 0, stream>>>(
           keys.data<uint32_t>(), out.data<uint8_t>(), odd, bytes_per_key);

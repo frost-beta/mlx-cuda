@@ -98,7 +98,7 @@ __global__ void arg_reduce_general(
   Op op;
 
   // Compute the input/output index. There is one beginning and one output for
-  // the whole threadgroup.
+  // the whole block.
   auto elem = cg::this_grid().block_rank();
   auto in_idx = elem_to_loc(elem, shape.data(), in_strides.data(), ndim);
   auto out_idx = elem_to_loc(elem, shape.data(), out_strides.data(), ndim);

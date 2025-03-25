@@ -9,8 +9,9 @@
 #include <cuda/std/array>
 #include <cuda/std/limits>
 
-namespace mlx::core::mxcuda {
+namespace mlx::core {
 
+// The clang-format is not friendly with "#pragma unroll" so use a macro.
 #define CUDA_UNROLL _Pragma("unroll")
 
 // All existing NVIDIA hardware has fixed 32 warp size. Though there is warpSize
@@ -20,28 +21,29 @@ namespace mlx::core::mxcuda {
 // The maximum maxThreadsPerBlock value. Some code use it to define the size of
 // shared memory.
 // TODO: Kernels ported from Metal assume this number to be <= 1024, we should
-// figure out if this number could be larger in CUDA.
+// figure out if this number could be larger in CUDA - if so some kernels need
+// rewritten.
 #define MAX_BLOCK_DIM 1024
 
 template <typename T, typename U>
-inline __host__ __device__ auto ceil_div(T a, U b) {
+constexpr __host__ __device__ auto ceil_div(T a, U b) {
   return (a + (b - 1)) / b;
 }
 
-inline __host__ __device__ dim3 ceil_div(dim3 a, dim3 b) {
+constexpr __host__ __device__ dim3 ceil_div(dim3 a, dim3 b) {
   return {ceil_div(a.x, b.x), ceil_div(a.y, b.y), ceil_div(a.z, b.z)};
 }
 
+namespace mxcuda {
+
 ///////////////////////////////////////////////////////////////////////////////
-// Kernel parameter utils
+// CUDA kernel utils
 ///////////////////////////////////////////////////////////////////////////////
 
-// When passing shape/strides to kernels, to pass them via constant memory we
-// have to know their size at compile time. We define a maximum dim used for
-// reserving memory.
+// To pass shape/strides to kernels via constant memory, their size must be
+// known at compile time.
 #define MAX_NDIM 8
 
-// Kernels should use below types for shape and strides parameters.
 using Shape = cuda::std::array<int32_t, MAX_NDIM>;
 using Strides = cuda::std::array<int64_t, MAX_NDIM>;
 
@@ -55,6 +57,26 @@ inline cuda::std::array<T, MAX_NDIM> const_param(const std::vector<T>& vec) {
   std::copy_n(vec.begin(), vec.size(), result.begin());
   return result;
 }
+
+// Helper macros for dispatch macros (see below).
+#define MLX_INTERNAL_IF_CASE(DIM, THREADS, BLOCK_DIM, ...) \
+  if (THREADS <= DIM) {                                    \
+    constexpr uint32_t BLOCK_DIM = DIM;                    \
+    __VA_ARGS__;                                           \
+  }
+
+#define MLX_INTERNAL_IF_CASE_DIMS(...)   \
+  MLX_INTERNAL_IF_CASE(32, __VA_ARGS__)  \
+  MLX_INTERNAL_IF_CASE(64, __VA_ARGS__)  \
+  MLX_INTERNAL_IF_CASE(128, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(256, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(512, __VA_ARGS__) \
+  MLX_INTERNAL_IF_CASE(1024, __VA_ARGS__)
+
+// Some kernels use CUB which requires block_dim to be known at compile-time,
+// use this to dispatch fixed block_dim from dynamic total_threads.
+#define MLX_GET_BLOCK_DIM(THREADS, BLOCK_DIM, ...) \
+  MLX_INTERNAL_IF_CASE_DIMS(THREADS, BLOCK_DIM, __VA_ARGS__)
 
 ///////////////////////////////////////////////////////////////////////////////
 // Type limits utils
@@ -150,4 +172,6 @@ inline __host__ __device__ IdxT elem_to_loc_3(uint3 elem, int64_t strides[3]) {
       elem.z * IdxT(strides[0]);
 }
 
-} // namespace mlx::core::mxcuda
+} // namespace mxcuda
+
+} // namespace mlx::core
