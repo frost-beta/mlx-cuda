@@ -54,6 +54,15 @@ void DeviceStream::add_host_callback(std::function<void()> func) {
       new std::function<void()>(std::move(func))));
 }
 
+void CommandEncoder::prefetch_memory(const array& arr) {
+  // TODO: Use a stream that maximizes parallelism.
+  const void* ptr = arr.data<void>();
+  if (ptr && arr.size() > 0) {
+    CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
+        ptr, arr.size(), stream_.device().index, stream_.last_cuda_stream()));
+  }
+}
+
 DeviceStream& get_stream(Stream stream) {
   return get_command_encoder(stream).stream();
 }

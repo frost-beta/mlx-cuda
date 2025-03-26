@@ -10,10 +10,10 @@
 
 namespace mlx::core::mxcuda {
 
-// We have to set current device before calling some APIs to make multi-device
-// work, including kernel launching.
+// We need to set/get current CUDA device very frequently, cache it to reduce
+// actual calls of CUDA APIs. This function assumes single-thread in host.
 inline void set_cuda_device(Device device) {
-  thread_local static int device_ = 0;
+  static int device_ = 0;
   if (device.index != device_) {
     CHECK_CUDA_ERROR(cudaSetDevice(device.index));
     device_ = device.index;
@@ -55,9 +55,15 @@ class CommandEncoder {
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
-  void set_input_array(const Arrays&... arrays) {}
+  void set_input_array(const Arrays&... arrays) {
+    (prefetch_memory(arrays), ...);
+  }
+
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
-  void set_output_array(const Arrays&... arrays) {}
+  void set_output_array(const Arrays&... arrays) {
+    (prefetch_memory(arrays), ...);
+  }
+
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
   void add_temporary(Arrays&&... arrays) {
     (temporaries_.push_back(std::forward<Arrays>(arrays)), ...);
@@ -76,6 +82,9 @@ class CommandEncoder {
   template <typename F>
   void launch_thrust(F&& fun) {
     launch_kernel([&](cudaStream_t stream) {
+      // Make thrust dispatch work on stream asynchronously.
+      // TODO: If we are going to keep the thrust APIs in the end, we should
+      // use a custom allocator that works with existing buffer cache.
       auto nosync_exec_policy = thrust::cuda::par_nosync.on(stream);
       fun(nosync_exec_policy);
     });
@@ -95,6 +104,8 @@ class CommandEncoder {
       stream_.add_host_callback([temporaries = std::move(temporaries_)]() {});
     }
   }
+
+  void prefetch_memory(const array& arr);
 
   DeviceStream stream_;
   std::vector<array> temporaries_;
