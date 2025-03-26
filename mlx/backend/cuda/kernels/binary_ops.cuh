@@ -134,10 +134,10 @@ struct LogAddExp {
     if (isnan(x) || isnan(y)) {
       return cuda::std::numeric_limits<T>::quiet_NaN();
     }
-    constexpr T inf = cuda::std::numeric_limits<T>::infinity();
     T maxval = max(x, y);
     T minval = min(x, y);
-    return (minval == -inf || maxval == inf)
+    return (minval == negative_infinite_value<T>() ||
+            maxval == infinite_value<T>())
         ? maxval
         : (maxval + log1p(expf(minval - maxval)));
   };

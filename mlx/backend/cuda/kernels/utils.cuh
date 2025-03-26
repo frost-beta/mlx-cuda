@@ -106,16 +106,14 @@ struct Limits<cuComplex> {
       -cuda::std::numeric_limits<float>::infinity()};
 };
 
-#define SPECIALIZE_FloatLimits(CPP_TYPE, DTYPE)                    \
-  template <>                                                      \
-  struct Limits<CPP_TYPE> {                                        \
-    static constexpr CPP_TYPE max =                                \
-        cuda::std::numeric_limits<CPP_TYPE>::infinity();           \
-    static constexpr CPP_TYPE min = negative_infinite<CPP_TYPE>(); \
-    static constexpr CPP_TYPE finite_max =                         \
-        cuda::std::numeric_limits<CPP_TYPE>::max();                \
-    static constexpr CPP_TYPE finite_min =                         \
-        cuda::std::numeric_limits<CPP_TYPE>::min();                \
+// Some CCCL/Cuda combinations do not provide constexpr limits for half types.
+#define SPECIALIZE_FloatLimits(CPP_TYPE, DTYPE)                          \
+  template <>                                                            \
+  struct Limits<CPP_TYPE> {                                              \
+    static constexpr CPP_TYPE max = infinite_value<CPP_TYPE>();          \
+    static constexpr CPP_TYPE min = negative_infinite_value<CPP_TYPE>(); \
+    static constexpr CPP_TYPE finite_max = finite_max_value<CPP_TYPE>(); \
+    static constexpr CPP_TYPE finite_min = finite_min_value<CPP_TYPE>(); \
   };
 
 MLX_FORALL_CUDA_FLOAT_TYPES(SPECIALIZE_FloatLimits)

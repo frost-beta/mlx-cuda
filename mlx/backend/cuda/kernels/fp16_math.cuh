@@ -9,7 +9,20 @@
 namespace mlx::core::mxcuda {
 
 template <typename T>
-constexpr T negative_infinite() {
+constexpr __host__ __device__ T infinite_value() {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    uint16_t value = 0x7C00;
+    return __builtin_bit_cast(__half, value);
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    uint16_t value = 0x7F80;
+    return __builtin_bit_cast(__nv_bfloat16, value);
+  } else {
+    return cuda::std::numeric_limits<T>::infinity();
+  }
+}
+
+template <typename T>
+constexpr __host__ __device__ T negative_infinite_value() {
   if constexpr (cuda::std::is_same_v<T, __half>) {
     uint16_t value = 0xFC00;
     return __builtin_bit_cast(__half, value);
@@ -18,6 +31,32 @@ constexpr T negative_infinite() {
     return __builtin_bit_cast(__nv_bfloat16, value);
   } else {
     return -cuda::std::numeric_limits<T>::infinity();
+  }
+}
+
+template <typename T>
+constexpr __host__ __device__ T finite_max_value() {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    uint16_t value = 0x7BFF;
+    return __builtin_bit_cast(__half, value);
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    uint16_t value = 0x7F7F;
+    return __builtin_bit_cast(__nv_bfloat16, value);
+  } else {
+    return cuda::std::numeric_limits<T>::max();
+  }
+}
+
+template <typename T>
+constexpr __host__ __device__ T finite_min_value() {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    uint16_t value = 0xFBFF;
+    return __builtin_bit_cast(__half, value);
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    uint16_t value = 0xFF7F;
+    return __builtin_bit_cast(__nv_bfloat16, value);
+  } else {
+    return cuda::std::numeric_limits<T>::min();
   }
 }
 
