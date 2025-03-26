@@ -1,11 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-#pragma once
-
-#include "mlx/backend/cuda/kernels/cucomplex_math.cuh"
-#include "mlx/backend/cuda/kernels/fp16_math.cuh"
-
-#include <cuda/std/array>
+#include "mlx/backend/cuda/kernels/utils.cuh"
 
 namespace mlx::core::mxcuda {
 

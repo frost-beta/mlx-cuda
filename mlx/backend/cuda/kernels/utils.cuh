@@ -3,9 +3,9 @@
 #pragma once
 
 #include "mlx/backend/cuda/dtype_utils.cuh"
+#include "mlx/backend/cuda/kernels/cucomplex_math.cuh"
 #include "mlx/backend/cuda/kernels/fp16_math.cuh"
 
-#include <cuComplex.h>
 #include <cuda/std/array>
 #include <cuda/std/limits>
 
@@ -25,10 +25,8 @@ namespace mlx::core {
 // rewritten.
 #define MAX_BLOCK_DIM 1024
 
-template <typename T, typename U>
-constexpr __host__ __device__ auto ceil_div(T a, U b) {
-  return (a + (b - 1)) / b;
-}
+// (a + b - 1) / b
+using ::cuda::ceil_div;
 
 constexpr __host__ __device__ dim3 ceil_div(dim3 a, dim3 b) {
   return {ceil_div(a.x, b.x), ceil_div(a.y, b.y), ceil_div(a.z, b.z)};
@@ -106,7 +104,7 @@ struct Limits<cuComplex> {
       -cuda::std::numeric_limits<float>::infinity()};
 };
 
-// Some CCCL/Cuda combinations do not provide constexpr limits for half types.
+// Some CCCL/CUDA combinations do not provide constexpr limits for half types.
 #define SPECIALIZE_FloatLimits(CPP_TYPE, DTYPE)                          \
   template <>                                                            \
   struct Limits<CPP_TYPE> {                                              \

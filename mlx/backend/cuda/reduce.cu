@@ -2,10 +2,14 @@
 
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/kernels/reduce_ops.cuh"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/primitives.h"
 
 #include <assert.h>
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
+#include <thrust/iterator/constant_iterator.h>
 
 namespace mlx::core {
 
@@ -25,6 +29,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& s = stream();
   auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
 
   // Reduce
   if (in.size() > 0) {
@@ -43,7 +49,19 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       in = in_copy;
       plan = get_reduction_plan(in, axes_);
     }
+
+    throw std::runtime_error("Reduce plan not implemented in CUDA.");
   } else {
+    encoder.launch_thrust([&](auto policy) {
+      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE, [&]() {
+        thrust::copy_n(
+            policy,
+            thrust::make_constant_iterator(mxcuda::Sum<CTYPE>::init),
+            out.size(),
+            thrust::device_pointer_cast(out.data<CTYPE>()));
+      });
+    });
+    throw std::runtime_error("Reduce plan not implemented in CUDA.");
   }
 }
 

@@ -6,6 +6,8 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
 
+#include <thrust/execution_policy.h>
+
 namespace mlx::core::mxcuda {
 
 // We have to set current device before calling some APIs to make multi-device
@@ -61,14 +63,22 @@ class CommandEncoder {
     (temporaries_.push_back(std::forward<Arrays>(arrays)), ...);
   }
 
-  template <class F>
+  template <typename F>
   void launch_kernel(F&& fun) {
     launch_kernel_with(std::forward<F>(fun), stream_.schedule_cuda_stream());
   }
 
-  template <class F>
+  template <typename F>
   void launch_kernel_sequencially(F&& fun) {
     launch_kernel_with(std::forward<F>(fun), stream_.last_cuda_stream());
+  }
+
+  template <typename F>
+  void launch_thrust(F&& fun) {
+    launch_kernel([&](cudaStream_t stream) {
+      auto nosync_exec_policy = thrust::cuda::par_nosync.on(stream);
+      fun(nosync_exec_policy);
+    });
   }
 
   DeviceStream& stream() {
@@ -76,7 +86,7 @@ class CommandEncoder {
   }
 
  private:
-  template <class F>
+  template <typename F>
   void launch_kernel_with(F&& fun, cudaStream_t stream) {
     set_cuda_device(stream_.device());
     fun(stream);

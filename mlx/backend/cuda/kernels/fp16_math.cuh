@@ -2,63 +2,61 @@
 
 #pragma once
 
+#include <cuComplex.h>
 #include <cuda_fp16.h>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace mlx::core::mxcuda {
 
-template <typename T>
-constexpr __host__ __device__ T infinite_value() {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    uint16_t value = 0x7C00;
-    return __builtin_bit_cast(__half, value);
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    uint16_t value = 0x7F80;
-    return __builtin_bit_cast(__nv_bfloat16, value);
-  } else {
-    return cuda::std::numeric_limits<T>::infinity();
+// Some versions of CUDA does not provide constexpr values for half types.
+#define MLX_DEFINE_CONSTEXPR_VALUE(NAME, HALF_VALUE, BF16_VALUE, ...) \
+  template <typename T>                                               \
+  constexpr __host__ __device__ T NAME() {                            \
+    if constexpr (cuda::std::is_same_v<T, __half>) {                  \
+      uint16_t value = HALF_VALUE;                                    \
+      return __builtin_bit_cast(__half, value);                       \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {    \
+      uint16_t value = BF16_VALUE;                                    \
+      return __builtin_bit_cast(__nv_bfloat16, value);                \
+    } else {                                                          \
+      return __VA_ARGS__();                                           \
+    }                                                                 \
   }
-}
 
-template <typename T>
-constexpr __host__ __device__ T negative_infinite_value() {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    uint16_t value = 0xFC00;
-    return __builtin_bit_cast(__half, value);
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    uint16_t value = 0xFF80;
-    return __builtin_bit_cast(__nv_bfloat16, value);
+MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, []() -> T {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{0, 0};
   } else {
-    return -cuda::std::numeric_limits<T>::infinity();
+    return 0;
   }
-}
+});
 
-template <typename T>
-constexpr __host__ __device__ T finite_max_value() {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    uint16_t value = 0x7BFF;
-    return __builtin_bit_cast(__half, value);
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    uint16_t value = 0x7F7F;
-    return __builtin_bit_cast(__nv_bfloat16, value);
+MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, []() -> T {
+  if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+    return cuComplex{1, 1};
   } else {
-    return cuda::std::numeric_limits<T>::max();
+    return 1;
   }
-}
+});
 
-template <typename T>
-constexpr __host__ __device__ T finite_min_value() {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    uint16_t value = 0xFBFF;
-    return __builtin_bit_cast(__half, value);
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    uint16_t value = 0xFF7F;
-    return __builtin_bit_cast(__nv_bfloat16, value);
-  } else {
-    return cuda::std::numeric_limits<T>::min();
-  }
-}
+MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, []() -> T {
+  return cuda::std::numeric_limits<T>::infinity();
+});
+
+MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, []() {
+  return -cuda::std::numeric_limits<T>::infinity();
+});
+
+MLX_DEFINE_CONSTEXPR_VALUE(finite_max_value, 0x7BFF, 0x7F7F, []() {
+  return cuda::std::numeric_limits<T>::max();
+});
+
+MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, []() {
+  return cuda::std::numeric_limits<T>::min();
+});
+
+#undef MLX_DEFINE_CONSTEXPR_VALUE
 
 template <typename T>
 __forceinline__ __device__ bool isnan(T x) {

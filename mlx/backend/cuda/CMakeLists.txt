@@ -21,7 +21,9 @@ set_target_properties(
              CUDA_ARCHITECTURES "70;80")
 
 # Use fixed version of CCCL.
-FetchContent_Declare(cccl URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-src-v2.8.1.zip")
+FetchContent_Declare(
+  cccl
+  URL "https://github.com/NVIDIA/cccl/releases/download/v2.8.1/cccl-v2.8.1.zip")
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx PRIVATE BEFORE "${cccl_SOURCE_DIR}/include")
 

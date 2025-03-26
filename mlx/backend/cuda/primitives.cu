@@ -14,12 +14,12 @@
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    throw std::runtime_error(#func " has no CUDA implementation.");     \
+    throw std::runtime_error(#func " has no CUDA implementation.");    \
   }
 
 #define NO_GPU(func)                                                  \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    throw std::runtime_error(#func " has no CUDA implementation.");    \
+    throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
 namespace mlx::core {
