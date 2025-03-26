@@ -4,7 +4,6 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/metal/metal.h"
 
-#include <cuda/atomic>
 #include <unordered_map>
 
 namespace mlx::core {
@@ -83,7 +82,7 @@ CommandEncoder& get_command_encoder(Stream stream) {
 namespace metal {
 
 void new_stream(Stream stream) {
-  // Ensure the static stream objects are created.
+  // Ensure the static stream objects get created.
   mxcuda::get_command_encoder(stream);
 }
 
@@ -92,10 +91,6 @@ device_info() {
   throw std::runtime_error(
       "[metal::device_info] Not implemented in CUDA backend.");
 };
-
-std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
-  return nullptr;
-}
 
 } // namespace metal
 

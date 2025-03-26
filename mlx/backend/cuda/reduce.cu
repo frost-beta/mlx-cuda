@@ -10,7 +10,7 @@
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/constant_iterator.h>
-#include <thrust/reduce.h>
+#include <cub/device/device_reduce.cuh>
 
 namespace mlx::core {
 
@@ -52,6 +52,17 @@ constexpr bool is_supported_reduce_op(Op<T>) {
     return true;
   }
   return false;
+}
+
+template <typename... Args>
+void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
+  // Get required size for temporary storage and allocate it.
+  size_t size;
+  CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(nullptr, size, args...));
+  array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
+  encoder.add_temporary(temp);
+  // Actually run reduce.
+  CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(temp.data<void>(), size, args...));
 }
 
 } // namespace
@@ -106,17 +117,20 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     plan = get_reduction_plan(in, axes_);
   }
 
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE, [&]() {
       MLX_SWITCH_REDUCE_TYPES(reduce_type_, CTYPE, OP, {
         if constexpr (is_supported_reduce_op(OP{})) {
           if (plan.type == ContiguousAllReduce) {
-            *(out.data<CTYPE>()) = thrust::reduce(
-                policy,
+            all_reduce(
+                encoder,
                 thrust::device_pointer_cast(in.data<CTYPE>()),
-                thrust::device_pointer_cast(in.data<CTYPE>() + in.data_size()),
+                thrust::device_pointer_cast(
+                    out.data<std::remove_const_t<decltype(OP::init)>>()),
+                in.data_size(),
+                OP(),
                 OP::init,
-                OP());
+                stream);
           } else if (
               plan.type == ContiguousReduce ||
               plan.type == GeneralContiguousReduce) {
