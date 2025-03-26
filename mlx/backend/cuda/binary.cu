@@ -158,7 +158,7 @@ void binary_op_gpu_inplace(
           }
         } else {
           throw std::runtime_error(fmt::format(
-              "Can not do binary op {} on inputs of dtype {} with result of {}",
+              "Can not do binary op {} on inputs of {} with result of {}.",
               op,
               dtype_to_string(a.dtype()),
               dtype_to_string(out.dtype())));

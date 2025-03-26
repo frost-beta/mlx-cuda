@@ -13,6 +13,48 @@
 
 namespace mlx::core {
 
+namespace {
+
+#define MLX_FORALL_REDUCE_TYPES(_, ...) \
+  _(And, __VA_ARGS__)                   \
+  _(Or, __VA_ARGS__)                    \
+  _(Sum, __VA_ARGS__)                   \
+  _(Prod, __VA_ARGS__)                  \
+  _(Max, __VA_ARGS__)                   \
+  _(Min, __VA_ARGS__)
+
+#define MLX_SWITCH_CASE_REDUCE_TYPE(TYPE, CTYPE, OP, ...) \
+  case Reduce::TYPE: {                                    \
+    using OP = mxcuda::TYPE<CTYPE>;                       \
+    __VA_ARGS__;                                          \
+    break;                                                \
+  }
+
+#define MLX_SWITCH_REDUCE_TYPES(TYPE, CTYPE, OP, ...)        \
+  switch (TYPE) {                                            \
+    MLX_FORALL_REDUCE_TYPES(                                 \
+        MLX_SWITCH_CASE_REDUCE_TYPE, CTYPE, OP, __VA_ARGS__) \
+  }
+
+template <template<typename> class Op, typename T>
+constexpr bool is_supported_reduce_init(Op<T>) {
+  if (std::is_same_v<Op<T>, mxcuda::And<T>> ||
+      std::is_same_v<Op<T>, mxcuda::Or<T>>) {
+    return std::is_same_v<T, bool>;
+  }
+  if (std::is_same_v<Op<T>, mxcuda::Sum<T>> ||
+      std::is_same_v<Op<T>, mxcuda::Prod<T>>) {
+    return !std::is_same_v<T, bool>;
+  }
+  if (std::is_same_v<Op<T>, mxcuda::Min<T>> ||
+      std::is_same_v<Op<T>, mxcuda::Max<T>>) {
+    return true;
+  }
+  return false;
+}
+
+} // namespace
+
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   array in = inputs[0];
@@ -54,14 +96,21 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   } else {
     encoder.launch_thrust([&](auto policy) {
       MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE, [&]() {
-        thrust::copy_n(
-            policy,
-            thrust::make_constant_iterator(mxcuda::Sum<CTYPE>::init),
-            out.size(),
-            thrust::device_pointer_cast(out.data<CTYPE>()));
+        MLX_SWITCH_REDUCE_TYPES(reduce_type_, CTYPE, OP, {
+          if constexpr (is_supported_reduce_init(OP{})) {
+            thrust::copy_n(
+                policy,
+                thrust::make_constant_iterator(OP::init),
+                out.size(),
+                thrust::device_pointer_cast(out.data<CTYPE>()));
+          } else {
+            throw std::runtime_error(fmt::format(
+                "Can not do reduce init op on dtype {}.",
+                dtype_to_string(out.dtype())));
+          }
+        });
       });
     });
-    throw std::runtime_error("Reduce plan not implemented in CUDA.");
   }
 }
 
