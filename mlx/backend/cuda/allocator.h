@@ -4,7 +4,7 @@
 
 #include "mlx/allocator.h"
 
-#include <mutex>
+#include <utility>
 
 namespace mlx::core::mxcuda {
 
@@ -29,14 +29,12 @@ class CudaAllocator : public allocator::Allocator {
     return peak_memory_;
   };
   void reset_peak_memory() {
-    std::unique_lock lk(mutex_);
     peak_memory_ = 0;
   };
   size_t get_memory_limit() {
     return memory_limit_;
   }
   size_t set_memory_limit(size_t limit) {
-    std::unique_lock lk(mutex_);
     std::swap(memory_limit_, limit);
     return limit;
   }
@@ -45,7 +43,6 @@ class CudaAllocator : public allocator::Allocator {
   CudaAllocator();
   friend CudaAllocator& allocator();
 
-  std::mutex mutex_;
   size_t memory_limit_;
   size_t active_memory_{0};
   size_t peak_memory_{0};

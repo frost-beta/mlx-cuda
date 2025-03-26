@@ -24,7 +24,6 @@ Buffer CudaAllocator::malloc(size_t size) {
     throw std::runtime_error(
         fmt::format("cudaMallocManaged failed: {}", cudaGetErrorString(err)));
   }
-  std::unique_lock lk(mutex_);
   active_memory_ += size;
   peak_memory_ = std::max(active_memory_, peak_memory_);
   return Buffer{buf};
@@ -35,11 +34,9 @@ void CudaAllocator::free(Buffer buffer) {
   if (!buf) {
     return;
   }
-  size_t size = buf->size;
+  active_memory_ -= buf->size;
   cudaFree(buf->data);
   delete buf;
-  std::unique_lock lk(mutex_);
-  active_memory_ -= size;
 }
 
 size_t CudaAllocator::size(Buffer buffer) const {
