@@ -80,7 +80,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
             thrust::copy_n(
                 policy,
                 thrust::make_constant_iterator(OP::init),
-                out.size(),
+                out.data_size(),
                 thrust::device_pointer_cast(out.data<CTYPE>()));
           } else {
             throw std::runtime_error(fmt::format(
