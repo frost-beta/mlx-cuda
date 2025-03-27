@@ -65,6 +65,18 @@ MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, {
 // Unary ops for half types.
 ///////////////////////////////////////////////////////////////////////////////
 
+__forceinline__ __device__ __half operator!(__half x) {
+  return __hneg(x);
+}
+
+__forceinline__ __device__ __nv_bfloat16 operator!(__nv_bfloat16 x) {
+#if __CUDA_ARCH__ >= 800
+  return __hneg(x);
+#else
+  return !x;
+#endif
+}
+
 #if __CUDA_ARCH__ >= 800
 #define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)                         \
   template <typename T>                                            \
@@ -89,15 +101,49 @@ MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, {
   }
 #endif
 
+#define MLX_DEFINE_UNARY_OP_FALLBCK(NAME)                          \
+  template <typename T>                                            \
+  __forceinline__ __device__ auto NAME(T x) {                      \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return ::NAME(__half2float(x));                              \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return ::NAME(__bfloat162float(x));                          \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
+  }
+
 MLX_DEFINE_UNARY_OP(abs, __habs)
+MLX_DEFINE_UNARY_OP(ceil, hceil)
+MLX_DEFINE_UNARY_OP(cos, hcos)
+MLX_DEFINE_UNARY_OP(exp, hexp)
+MLX_DEFINE_UNARY_OP(floor, hfloor)
 MLX_DEFINE_UNARY_OP(isnan, __hisnan)
 MLX_DEFINE_UNARY_OP(log, hlog)
 MLX_DEFINE_UNARY_OP(log2, hlog2)
 MLX_DEFINE_UNARY_OP(log10, hlog10)
-MLX_DEFINE_UNARY_OP(log1p, hlog1p)
 MLX_DEFINE_UNARY_OP(rint, hrint)
+MLX_DEFINE_UNARY_OP(rsqrt, hrsqrt)
+MLX_DEFINE_UNARY_OP(sin, hsin)
+MLX_DEFINE_UNARY_OP(sqrt, hsqrt)
+MLX_DEFINE_UNARY_OP_FALLBCK(acos)
+MLX_DEFINE_UNARY_OP_FALLBCK(acosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(asin)
+MLX_DEFINE_UNARY_OP_FALLBCK(asinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(atan)
+MLX_DEFINE_UNARY_OP_FALLBCK(atanh)
+MLX_DEFINE_UNARY_OP_FALLBCK(cosh)
+MLX_DEFINE_UNARY_OP_FALLBCK(log1p)
+MLX_DEFINE_UNARY_OP_FALLBCK(sinh)
+MLX_DEFINE_UNARY_OP_FALLBCK(tan)
+#if __CUDA_ARCH__ >= 1280
+MLX_DEFINE_UNARY_OP(tanh, htanh)
+#else
+MLX_DEFINE_UNARY_OP_FALLBCK(tanh)
+#endif
 
 #undef MLX_DEFINE_UNARY_OP
+#undef MLX_DEFINE_UNARY_OP_FALLBCK
 
 ///////////////////////////////////////////////////////////////////////////////
 // Binary ops for half types.
@@ -191,7 +237,7 @@ MLX_DEFINE_BF16_CMP(<=)
   template <                                                             \
       typename T,                                                        \
       typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
-  __forceinline__ __device__ bool operator OP(T x, HALF y) {             \
+  __forceinline__ __device__ HALF operator OP(T x, HALF y) {             \
     return FLOAT2HALF(static_cast<float>(x) OP HALF2FLOAT(y));           \
   }
 

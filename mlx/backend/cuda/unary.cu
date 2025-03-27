@@ -14,7 +14,8 @@ namespace {
 
 template <typename Op, typename In, typename Out>
 constexpr bool is_supported_unary_op() {
-  if (std::is_same_v<Op, mxcuda::Abs>) {
+  if (std::is_same_v<Op, mxcuda::Abs> || std::is_same_v<Op, mxcuda::Negative> ||
+      std::is_same_v<Op, mxcuda::Sign>) {
     return std::is_same_v<In, Out>;
   }
   if (std::is_same_v<Op, mxcuda::ArcCos> ||
@@ -22,18 +23,36 @@ constexpr bool is_supported_unary_op() {
       std::is_same_v<Op, mxcuda::ArcSin> ||
       std::is_same_v<Op, mxcuda::ArcSinh> ||
       std::is_same_v<Op, mxcuda::ArcTan> ||
-      std::is_same_v<Op, mxcuda::ArcTanh> || std::is_same_v<Op, mxcuda::Log> ||
+      std::is_same_v<Op, mxcuda::ArcTanh> || std::is_same_v<Op, mxcuda::Erf> ||
+      std::is_same_v<Op, mxcuda::ErfInv> || std::is_same_v<Op, mxcuda::Expm1> ||
+      std::is_same_v<Op, mxcuda::Log1p> || std::is_same_v<Op, mxcuda::Log> ||
       std::is_same_v<Op, mxcuda::Log2> || std::is_same_v<Op, mxcuda::Log10> ||
-      std::is_same_v<Op, mxcuda::Log1p>) {
+      std::is_same_v<Op, mxcuda::Sigmoid> || std::is_same_v<Op, mxcuda::Sqrt>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if (std::is_same_v<Op, mxcuda::BitwiseInvert>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
         !std::is_same_v<In, bool>;
   }
-  if (std::is_same_v<Op, mxcuda::Round>) {
+  if (std::is_same_v<Op, mxcuda::Ceil> || std::is_same_v<In, mxcuda::Floor> ||
+      std::is_same_v<In, mxcuda::Square>) {
+    return std::is_same_v<In, Out> && !std::is_same_v<In, complex64_t>;
+  }
+  if (std::is_same_v<Op, mxcuda::Conjugate>) {
+    return std::is_same_v<In, Out> && std::is_same_v<In, complex64_t>;
+  }
+  if (std::is_same_v<Op, mxcuda::Cos> || std::is_same_v<Op, mxcuda::Cosh> ||
+      std::is_same_v<Op, mxcuda::Exp> || std::is_same_v<Op, mxcuda::Round> ||
+      std::is_same_v<Op, mxcuda::Sin> || std::is_same_v<Op, mxcuda::Sinh> ||
+      std::is_same_v<Op, mxcuda::Tan> || std::is_same_v<Op, mxcuda::Tanh>) {
     return std::is_same_v<In, Out> &&
         (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+  }
+  if (std::is_same_v<Op, mxcuda::Imag> || std::is_same_v<Op, mxcuda::Real>) {
+    return std::is_same_v<In, complex64_t> && std::is_same_v<Out, float>;
+  }
+  if (std::is_same_v<Op, mxcuda::LogicalNot>) {
+    return std::is_same_v<In, Out> && std::is_same_v<In, bool>;
   }
   return false;
 }
@@ -128,20 +147,13 @@ void unary_op_gpu(
 
 } // namespace
 
-#define UNARY_GPU_IMPLEMENTED(func)                                         \
+#define UNARY_GPU(func)                                         \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) {       \
     auto& s = out.primitive().stream();                                     \
     unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
   }
 
-#define UNARY_GPU(func)                                               \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    throw std::runtime_error(fmt::format(                             \
-        "Unary op {} not implemented for CUDA backend.",              \
-        get_primitive_string(this)));                                 \
-  }
-
-UNARY_GPU_IMPLEMENTED(Abs)
+UNARY_GPU(Abs)
 UNARY_GPU(ArcCos)
 UNARY_GPU(ArcCosh)
 UNARY_GPU(ArcSin)
@@ -149,6 +161,7 @@ UNARY_GPU(ArcSinh)
 UNARY_GPU(ArcTan)
 UNARY_GPU(ArcTanh)
 UNARY_GPU(BitwiseInvert)
+UNARY_GPU(Ceil)
 UNARY_GPU(Conjugate)
 UNARY_GPU(Cos)
 UNARY_GPU(Cosh)
@@ -156,11 +169,10 @@ UNARY_GPU(Erf)
 UNARY_GPU(ErfInv)
 UNARY_GPU(Exp)
 UNARY_GPU(Expm1)
+UNARY_GPU(Floor)
 UNARY_GPU(Imag)
 UNARY_GPU(Log1p)
 UNARY_GPU(LogicalNot)
-UNARY_GPU(Floor)
-UNARY_GPU(Ceil)
 UNARY_GPU(Negative)
 UNARY_GPU(Real)
 UNARY_GPU(Sigmoid)
