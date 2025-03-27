@@ -4,7 +4,7 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
 #include "mlx/backend/cuda/kernels/copy.cuh"
-#include "mlx/backend/cuda/kernels/repeat_iterator.cuh"
+#include "mlx/backend/cuda/kernels/iterators/repeat_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/primitives.h"

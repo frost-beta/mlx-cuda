@@ -1,6 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
-#include "mlx/backend/cuda/kernels/strided_iterator.cuh"
+#include "mlx/backend/cuda/kernels/iterators/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 
 #include <cooperative_groups.h>
