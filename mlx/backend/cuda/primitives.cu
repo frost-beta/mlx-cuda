@@ -11,6 +11,8 @@
 #include "mlx/primitives.h"
 
 #include <assert.h>
+#include <thrust/device_ptr.h>
+#include <thrust/sequence.h>
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
@@ -47,6 +49,28 @@ void reshape(const array& in, array& out, Stream s) {
 }
 
 } // namespace
+
+void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 0);
+  out.set_data(allocator::malloc(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
+  auto& s = stream();
+  auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_output_array(out);
+  encoder.launch_thrust([&](auto policy) {
+    MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, [&]() {
+      using OutType = cuda_type_t<CTYPE>;
+      thrust::sequence(
+          policy,
+          thrust::device_pointer_cast(out.data<OutType>()),
+          thrust::device_pointer_cast(out.data<OutType>() + out.data_size()),
+          start_,
+          step_);
+    });
+  });
+}
 
 void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
@@ -286,7 +310,6 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 NO_GPU(Abs)
 NO_GPU(AddMM)
-NO_GPU(Arange)
 NO_GPU(ArcCos)
 NO_GPU(ArcCosh)
 NO_GPU(ArcSin)

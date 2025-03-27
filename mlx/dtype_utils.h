@@ -134,10 +134,13 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
   MLX_INTERNAL_SWITCH_CASE(                                       \
       ::mlx::core::Dtype::Val::bfloat16, CTYPE_ALIAS, __VA_ARGS__)
 
-#define MLX_INTERNAL_SWITCH_CASE_REAL_TYPES(CTYPE_ALIAS, ...)    \
-  MLX_INTERNAL_SWITCH_CASE_INT_TYPES(CTYPE_ALIAS, __VA_ARGS__)   \
-  MLX_INTERNAL_SWITCH_CASE_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__) \
-  MLX_INTERNAL_SWITCH_CASE(                                      \
+#define MLX_INTERNAL_SWITCH_CASE_INT_FLOAT_TYPES(CTYPE_ALIAS, ...) \
+  MLX_INTERNAL_SWITCH_CASE_INT_TYPES(CTYPE_ALIAS, __VA_ARGS__)     \
+  MLX_INTERNAL_SWITCH_CASE_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__)
+
+#define MLX_INTERNAL_SWITCH_CASE_REAL_TYPES(CTYPE_ALIAS, ...)        \
+  MLX_INTERNAL_SWITCH_CASE_INT_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__) \
+  MLX_INTERNAL_SWITCH_CASE(                                          \
       ::mlx::core::Dtype::Val::bool_, CTYPE_ALIAS, __VA_ARGS__)
 
 #define MLX_INTERNAL_SWITCH_CASE_COMPLEX_TYPES(CTYPE_ALIAS, ...) \
@@ -195,6 +198,12 @@ MLX_FORALL_DTYPES(SPECIALIZE_CppTypeToDtype)
       TYPE,                                                          \
       NAME,                                                          \
       MLX_INTERNAL_SWITCH_CASE_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__))
+
+#define MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(TYPE, NAME, CTYPE_ALIAS, ...) \
+  MLX_INTERNAL_SWITCH_CHECKED(                                           \
+      TYPE,                                                              \
+      NAME,                                                              \
+      MLX_INTERNAL_SWITCH_CASE_INT_FLOAT_TYPES(CTYPE_ALIAS, __VA_ARGS__))
 
 #define MLX_SWITCH_REAL_TYPES_CHECKED(TYPE, NAME, CTYPE_ALIAS, ...) \
   MLX_INTERNAL_SWITCH_CHECKED(                                      \
