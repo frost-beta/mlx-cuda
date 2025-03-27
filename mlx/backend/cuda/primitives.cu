@@ -5,6 +5,7 @@
 #include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/cuda/kernels/random.cuh"
 #include "mlx/backend/metal/copy.h"
+#include "mlx/backend/metal/slicing.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
@@ -225,6 +226,17 @@ void Split::eval_gpu(
   eval(inputs, outputs);
 }
 
+void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  slice_gpu(in, out, start_indices_, strides_, stream());
+}
+
 void Squeeze::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
@@ -329,7 +341,6 @@ NO_GPU(Sigmoid)
 NO_GPU(Sign)
 NO_GPU(Sin)
 NO_GPU(Sinh)
-NO_GPU(Slice)
 NO_GPU(SliceUpdate)
 NO_GPU(Softmax)
 NO_GPU(Sort)

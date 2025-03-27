@@ -34,13 +34,6 @@ struct CTypeToCudaType<complex64_t> {
 template <typename T>
 using cuda_type_t = typename CTypeToCudaType<T>::type;
 
-// Like MLX_FORALL_FLOAT_TYPES but use CUDA types.
-#define MLX_FORALL_CUDA_FLOAT_TYPES(_) \
-  _(float, float32)                    \
-  _(double, float64)                   \
-  _(__half, float16)                   \
-  _(__nv_bfloat16, bfloat16)
-
 // Like MLX_SWITCH_XXX_TYPES but use CUDA types.
 #define MLX_SWITCH_CUDA_TYPES(TYPE, CTYPE_ALIAS, ...)           \
   MLX_SWITCH_ALL_TYPES(TYPE, CTYPE_NATIVE, [&]() {              \

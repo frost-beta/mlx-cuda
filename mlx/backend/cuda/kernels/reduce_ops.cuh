@@ -29,9 +29,6 @@ struct Sum {
   static constexpr U init = zero_value<U>();
 
   __device__ U operator()(U a, U b) {
-    if constexpr (cuda::std::is_same_v<U, float>) {
-      printf("sum: %d %d\n", (int)a, (int)b);
-    }
     return a + b;
   }
 };

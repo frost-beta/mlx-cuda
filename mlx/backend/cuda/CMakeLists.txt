@@ -1,3 +1,8 @@
+# Filename rules in CUDA backend:
+#
+# * Use .cu/.cuh if code contains device code, and .cpp/.h if not.
+# * Device-only kernel code should be put in kernels/ subdir.
+# * Files in kernels/ subdir should not include files outside.
 target_sources(
   mlx
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
@@ -9,6 +14,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
+          ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp)
 
 set_target_properties(

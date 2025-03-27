@@ -104,6 +104,13 @@ struct Limits<cuComplex> {
       -cuda::std::numeric_limits<float>::infinity()};
 };
 
+// Like MLX_FORALL_FLOAT_TYPES but use CUDA types.
+#define MLX_FORALL_CUDA_FLOAT_TYPES(_) \
+  _(float, float32)                    \
+  _(double, float64)                   \
+  _(__half, float16)                   \
+  _(__nv_bfloat16, bfloat16)
+
 // Some CCCL/CUDA combinations do not provide constexpr limits for half types.
 #define SPECIALIZE_FloatLimits(CPP_TYPE, DTYPE)                          \
   template <>                                                            \

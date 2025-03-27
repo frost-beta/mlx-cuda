@@ -4,11 +4,14 @@
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
 #include "mlx/backend/cuda/kernels/copy.cuh"
+#include "mlx/backend/cuda/kernels/repeat_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/primitives.h"
 
 #include <assert.h>
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
 
 namespace mlx::core {
 
@@ -90,7 +93,36 @@ void copy_gpu_inplace(
   });
 }
 
-// TODO: Code below are identical to backend/metal/copy.cpp.
+void fill_gpu(const array& val, array& out, const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
+  out.set_data(allocator::malloc(out.nbytes()));
+  auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_input_array(val);
+  encoder.set_output_array(out);
+  encoder.launch_thrust([&](auto policy) {
+    MLX_SWITCH_CUDA_TYPES(val.dtype(), CTYPE_IN, [&]() {
+      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE_OUT, [&]() {
+        if constexpr (std::is_convertible_v<CTYPE_IN, CTYPE_OUT>) {
+          thrust::copy_n(
+              policy,
+              mxcuda::make_repeat_iterator(
+                  thrust::device_pointer_cast(val.data<CTYPE_IN>())),
+              out.size(),
+              thrust::device_pointer_cast(out.data<CTYPE_OUT>()));
+        } else {
+          throw std::runtime_error(fmt::format(
+              "Can not fill data of dtype {} with {}",
+              dtype_to_string(out.dtype()),
+              dtype_to_string(val.dtype())));
+        }
+      });
+    });
+  });
+}
+
+// TODO: Code below are identical to backend/metal/copy.cpp
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   bool donated = set_copy_output_data(in, out, ctype);
   if (donated && in.dtype() == out.dtype()) {

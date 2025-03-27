@@ -14,7 +14,7 @@ void check_cuda_error(const char* name, cudaError_t err) {
   }
 }
 
-// TODO: The implementation is identical to meta/utils.cpp .
+// TODO: The implementation is identical to meta/utils.cpp
 dim3 get_block_dim(dim3 total_threads, int pow2) {
   int pows[3] = {0, 0, 0};
   int sum = 0;
