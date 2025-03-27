@@ -7,20 +7,6 @@
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/primitives.h"
 
-#define BINARY_GPU(func)                                                     \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {        \
-    auto& s = out.primitive().stream();                                      \
-    binary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
-  }
-
-#define BINARY_GPU_MULTI(func)                                         \
-  void func::eval_gpu(                                                 \
-      const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    auto& s = outputs[0].primitive().stream();                         \
-    binary_op_gpu<mxcuda::func>(                                       \
-        inputs, outputs, get_primitive_string(this), s);               \
-  }
-
 namespace mlx::core {
 
 namespace {
@@ -206,6 +192,20 @@ void binary_op_gpu(
 }
 
 } // namespace
+
+#define BINARY_GPU(func)                                                     \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) {        \
+    auto& s = out.primitive().stream();                                      \
+    binary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
+  }
+
+#define BINARY_GPU_MULTI(func)                                         \
+  void func::eval_gpu(                                                 \
+      const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    auto& s = outputs[0].primitive().stream();                         \
+    binary_op_gpu<mxcuda::func>(                                       \
+        inputs, outputs, get_primitive_string(this), s);               \
+  }
 
 BINARY_GPU(Add)
 BINARY_GPU(ArcTan2)
