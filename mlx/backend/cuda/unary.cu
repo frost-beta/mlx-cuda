@@ -27,15 +27,16 @@ constexpr bool is_supported_unary_op() {
       std::is_same_v<Op, mxcuda::ErfInv> || std::is_same_v<Op, mxcuda::Expm1> ||
       std::is_same_v<Op, mxcuda::Log1p> || std::is_same_v<Op, mxcuda::Log> ||
       std::is_same_v<Op, mxcuda::Log2> || std::is_same_v<Op, mxcuda::Log10> ||
-      std::is_same_v<Op, mxcuda::Sigmoid> || std::is_same_v<Op, mxcuda::Sqrt>) {
+      std::is_same_v<Op, mxcuda::Sigmoid> || std::is_same_v<Op, mxcuda::Sqrt> ||
+      std::is_same_v<Op, mxcuda::Rsqrt>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
   }
   if (std::is_same_v<Op, mxcuda::BitwiseInvert>) {
     return std::is_same_v<In, Out> && std::is_integral_v<In> &&
         !std::is_same_v<In, bool>;
   }
-  if (std::is_same_v<Op, mxcuda::Ceil> || std::is_same_v<In, mxcuda::Floor> ||
-      std::is_same_v<In, mxcuda::Square>) {
+  if (std::is_same_v<Op, mxcuda::Ceil> || std::is_same_v<Op, mxcuda::Floor> ||
+      std::is_same_v<Op, mxcuda::Square>) {
     return std::is_same_v<In, Out> && !std::is_same_v<In, complex64_t>;
   }
   if (std::is_same_v<Op, mxcuda::Conjugate>) {
@@ -180,7 +181,6 @@ UNARY_GPU(Sign)
 UNARY_GPU(Sin)
 UNARY_GPU(Sinh)
 UNARY_GPU(Square)
-UNARY_GPU(Sqrt)
 UNARY_GPU(Tan)
 UNARY_GPU(Tanh)
 
@@ -209,6 +209,15 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
+  }
+}
+
+void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& s = out.primitive().stream();
+  if (recip_) {
+    unary_op_gpu<mxcuda::Rsqrt>(inputs, out, "Rsqrt", s);
+  } else {
+    unary_op_gpu<mxcuda::Sqrt>(inputs, out, "Sqrt", s);
   }
 }
 

@@ -65,18 +65,6 @@ MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, {
 // Unary ops for half types.
 ///////////////////////////////////////////////////////////////////////////////
 
-__forceinline__ __device__ __half operator!(__half x) {
-  return __hneg(x);
-}
-
-__forceinline__ __device__ __nv_bfloat16 operator!(__nv_bfloat16 x) {
-#if __CUDA_ARCH__ >= 800
-  return __hneg(x);
-#else
-  return !x;
-#endif
-}
-
 #if __CUDA_ARCH__ >= 800
 #define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)                         \
   template <typename T>                                            \

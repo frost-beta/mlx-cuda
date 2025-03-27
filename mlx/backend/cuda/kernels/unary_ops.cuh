@@ -217,7 +217,7 @@ struct Negative {
     if constexpr (cuda::std::is_same_v<T, cuComplex>) {
       return 0 - x;
     } else {
-      return !x;
+      return -x;
     }
   }
 };
