@@ -17,6 +17,55 @@ struct Abs {
   }
 };
 
+struct ArcCos {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return acos(x);
+  }
+};
+
+struct ArcCosh {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return acosh(x);
+  }
+};
+
+struct ArcSin {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return asin(x);
+  }
+};
+
+struct ArcSinh {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return asinh(x);
+  }
+};
+
+struct ArcTan {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return atan(x);
+  }
+};
+
+struct ArcTanh {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return atanh(x);
+  }
+};
+
+struct BitwiseInvert {
+  template <typename T>
+  __device__ T operator()(T x) {
+    return ~x;
+  }
+};
+
 struct Log {
   template <typename T>
   __device__ T operator()(T x) {

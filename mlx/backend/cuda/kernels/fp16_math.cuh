@@ -9,7 +9,10 @@
 
 namespace mlx::core::mxcuda {
 
-// Some versions of CUDA does not provide constexpr values for half types.
+///////////////////////////////////////////////////////////////////////////////
+// Constant values for half types.
+///////////////////////////////////////////////////////////////////////////////
+
 #define MLX_DEFINE_CONSTEXPR_VALUE(NAME, HALF_VALUE, BF16_VALUE, ...) \
   template <typename T>                                               \
   constexpr __host__ __device__ T NAME() {                            \
@@ -58,70 +61,74 @@ MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, []() {
 
 #undef MLX_DEFINE_CONSTEXPR_VALUE
 
-template <typename T>
-__forceinline__ __device__ T log(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return hlog(x);
-#if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return hlog(x);
-#endif
-  } else {
-    return ::log(x);
-  }
-}
+///////////////////////////////////////////////////////////////////////////////
+// Unary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
 
-template <typename T>
-__forceinline__ __device__ T log2(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return hlog2(x);
 #if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return hlog2(x);
-#endif
-  } else {
-    return ::log2(x);
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)                         \
+  template <typename T>                                            \
+  __forceinline__ __host__ __device__ auto NAME(T x) {             \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x);                                           \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x);                                           \
+    } else {                                                       \
+      return ::NAME(x);                                            \
+    }                                                              \
   }
-}
+#else
+#define MLX_DEFINE_UNARY_OP(NAME, HALF_OP)             \
+  template <typename T>                                \
+  __forceinline__ __host__ __device__ auto NAME(T x) { \
+    if constexpr (cuda::std::is_same_v<T, __half>) {   \
+      return HALF_OP(x);                               \
+    } else {                                           \
+      return ::NAME(x);                                \
+    }                                                  \
+  }
+#endif
 
-template <typename T>
-__forceinline__ __device__ T log10(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return hlog10(x);
-#if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return hlog10(x);
-#endif
-  } else {
-    return ::log10(x);
-  }
-}
+MLX_DEFINE_UNARY_OP(abs, __habs)
+MLX_DEFINE_UNARY_OP(isnan, __hisnan)
+MLX_DEFINE_UNARY_OP(log, hlog)
+MLX_DEFINE_UNARY_OP(log2, hlog2)
+MLX_DEFINE_UNARY_OP(log10, hlog10)
+MLX_DEFINE_UNARY_OP(log1p, hlog1p)
+MLX_DEFINE_UNARY_OP(rint, hrint)
 
-template <typename T>
-__forceinline__ __device__ T log1p(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return hlog1p(x);
-#if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return hlog1p(x);
-#endif
-  } else {
-    return ::log1p(x);
-  }
-}
+#undef MLX_DEFINE_UNARY_OP
 
-template <typename T>
-__forceinline__ __device__ bool isnan(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return __hisnan(x);
+///////////////////////////////////////////////////////////////////////////////
+// Binary ops for half types.
+///////////////////////////////////////////////////////////////////////////////
+
 #if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __hisnan(x);
-#endif
-  } else {
-    return ::isnan(x);
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)                        \
+  template <typename T>                                            \
+  __forceinline__ __host__ __device__ auto NAME(T x, T y) {        \
+    if constexpr (cuda::std::is_same_v<T, __half>) {               \
+      return HALF_OP(x, y);                                        \
+    } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) { \
+      return HALF_OP(x, y);                                        \
+    } else {                                                       \
+      return ::NAME(x, y);                                         \
+    }                                                              \
   }
-}
+#else
+#define MLX_DEFINE_BINARY_OP(NAME, HALF_OP)                  \
+  template <typename T>                                     \
+  __forceinline__ __host__ __device__ auto NAME(T x, T y) { \
+    if constexpr (cuda::std::is_same_v<T, __half>) {        \
+      return HALF_OP(x, y);                                 \
+    } else {                                                \
+      return ::NAME(x, y);                                  \
+    }                                                       \
+  }
+#endif
+
+MLX_DEFINE_BINARY_OP(max, __hmax)
+MLX_DEFINE_BINARY_OP(min, __hmin)
 
 template <typename T>
 __forceinline__ __device__ T fmod(T x, T y) {
@@ -133,43 +140,6 @@ __forceinline__ __device__ T fmod(T x, T y) {
 #endif
   } else {
     return ::fmod(x, y);
-  }
-}
-
-template <typename T>
-__forceinline__ __device__ T rint(T x) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return __float2half(::rint(__half2float(x)));
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __float2bfloat16(::rint(__bfloat162float(x)));
-  } else {
-    return ::rint(x);
-  }
-}
-
-template <typename T>
-__forceinline__ __device__ T max(T x, T y) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return __float2half(::max(__half2float(x), __half2float(y)));
-#if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __float2bfloat16(::max(__bfloat162float(x), __bfloat162float(y)));
-#endif
-  } else {
-    return ::max(x, y);
-  }
-}
-
-template <typename T>
-__forceinline__ __device__ T min(T x, T y) {
-  if constexpr (cuda::std::is_same_v<T, __half>) {
-    return __float2half(::min(__half2float(x), __half2float(y)));
-#if __CUDA_ARCH__ >= 800
-  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
-    return __float2bfloat16(::min(__bfloat162float(x), __bfloat162float(y)));
-#endif
-  } else {
-    return ::min(x, y);
   }
 }
 

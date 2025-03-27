@@ -14,10 +14,24 @@ namespace {
 
 template <typename Op, typename In, typename Out>
 constexpr bool is_supported_unary_op() {
-  if (std::is_same_v<Op, mxcuda::Log> || std::is_same_v<Op, mxcuda::Log2> ||
-      std::is_same_v<Op, mxcuda::Log10> || std::is_same_v<Op, mxcuda::Log1p>) {
+  if (std::is_same_v<Op, mxcuda::Abs>) {
+    return std::is_same_v<In, Out>;
+  }
+  if (std::is_same_v<Op, mxcuda::ArcCos> ||
+      std::is_same_v<Op, mxcuda::ArcCosh> ||
+      std::is_same_v<Op, mxcuda::ArcSin> ||
+      std::is_same_v<Op, mxcuda::ArcSinh> ||
+      std::is_same_v<Op, mxcuda::ArcTan> ||
+      std::is_same_v<Op, mxcuda::ArcTanh> || std::is_same_v<Op, mxcuda::Log> ||
+      std::is_same_v<Op, mxcuda::Log2> || std::is_same_v<Op, mxcuda::Log10> ||
+      std::is_same_v<Op, mxcuda::Log1p>) {
     return std::is_same_v<In, Out> && is_floating_v<In>;
-  } else if (std::is_same_v<Op, mxcuda::Round>) {
+  }
+  if (std::is_same_v<Op, mxcuda::BitwiseInvert>) {
+    return std::is_same_v<In, Out> && std::is_integral_v<In> &&
+        !std::is_same_v<In, bool>;
+  }
+  if (std::is_same_v<Op, mxcuda::Round>) {
     return std::is_same_v<In, Out> &&
         (is_floating_v<In> || std::is_same_v<In, complex64_t>);
   }
@@ -114,14 +128,20 @@ void unary_op_gpu(
 
 } // namespace
 
-#define UNARY_GPU(func)                                                        \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {          \
-    auto& s = out.primitive().stream();                                        \
-    /* unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
-     */                                                                        \
+#define UNARY_GPU_IMPLEMENTED(func)                                         \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) {       \
+    auto& s = out.primitive().stream();                                     \
+    unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
   }
 
-UNARY_GPU(Abs)
+#define UNARY_GPU(func)                                               \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    throw std::runtime_error(fmt::format(                             \
+        "Unary op {} not implemented for CUDA backend.",              \
+        get_primitive_string(this)));                                 \
+  }
+
+UNARY_GPU_IMPLEMENTED(Abs)
 UNARY_GPU(ArcCos)
 UNARY_GPU(ArcCosh)
 UNARY_GPU(ArcSin)
