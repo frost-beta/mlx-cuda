@@ -19,6 +19,10 @@ target_sources(
 
 target_compile_definitions(mlx PUBLIC MLX_USE_CUDA)
 
+# Enable defining device lambda functions.
+target_compile_options(mlx
+                       PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
+
 set_target_properties(
   mlx
   PROPERTIES CUDA_STANDARD 17

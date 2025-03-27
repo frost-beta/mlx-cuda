@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/kernels/arange.cuh"
 #include "mlx/backend/cuda/kernels/arg_reduce.cuh"
 #include "mlx/backend/cuda/kernels/random.cuh"
 #include "mlx/backend/metal/copy.h"
@@ -12,7 +13,7 @@
 
 #include <assert.h>
 #include <thrust/device_ptr.h>
-#include <thrust/sequence.h>
+#include <thrust/transform.h>
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
@@ -59,15 +60,15 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_output_array(out);
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_thrust([&, this](auto policy) {
     MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, [&]() {
       using OutType = cuda_type_t<CTYPE>;
-      thrust::sequence(
+      thrust::transform(
           policy,
+          thrust::counting_iterator<uint32_t>(0),
+          thrust::counting_iterator<uint32_t>(out.size()),
           thrust::device_pointer_cast(out.data<OutType>()),
-          thrust::device_pointer_cast(out.data<OutType>() + out.data_size()),
-          start_,
-          step_);
+          mxcuda::make_arange<OutType>(start_, start_ + step_));
     });
   });
 }

@@ -30,7 +30,7 @@ MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, []() -> T {
   } else {
     return 0;
   }
-});
+})
 
 MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, []() -> T {
   if constexpr (cuda::std::is_same_v<T, cuComplex>) {
@@ -38,23 +38,23 @@ MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, []() -> T {
   } else {
     return 1;
   }
-});
+})
 
 MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, []() -> T {
   return cuda::std::numeric_limits<T>::infinity();
-});
+})
 
 MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, []() {
   return -cuda::std::numeric_limits<T>::infinity();
-});
+})
 
 MLX_DEFINE_CONSTEXPR_VALUE(finite_max_value, 0x7BFF, 0x7F7F, []() {
   return cuda::std::numeric_limits<T>::max();
-});
+})
 
 MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, []() {
   return cuda::std::numeric_limits<T>::min();
-});
+})
 
 #undef MLX_DEFINE_CONSTEXPR_VALUE
 
@@ -175,11 +175,6 @@ operator+=(__nv_bfloat16 x, __nv_bfloat16 y) {
 }
 
 __forceinline__ __device__ __nv_bfloat16
-operator-(__nv_bfloat16 x, __nv_bfloat16 y) {
-  return bf16hsub(x, y);
-}
-
-__forceinline__ __device__ __nv_bfloat16
 operator-=(__nv_bfloat16 x, __nv_bfloat16 y) {
   return bf16hsub(x, y);
 }
@@ -226,6 +221,18 @@ __forceinline__ __device__ __nv_bfloat16 operator+(__nv_bfloat16 x, float y) {
   return __float2bfloat16(__bfloat162float(x) + y);
 }
 
+__forceinline__ __device__ __nv_bfloat16 operator+(float y, __nv_bfloat16 x) {
+  return x + y;
+}
+
+__forceinline__ __device__ __nv_bfloat16 operator*(__nv_bfloat16 x, float y) {
+  return __float2bfloat16(__bfloat162float(x) * y);
+}
+
+__forceinline__ __device__ __nv_bfloat16 operator*(float y, __nv_bfloat16 x) {
+  return x * y;
+}
+
 template <typename T>
 __forceinline__ __device__ bool operator>(__nv_bfloat16 x, T y) {
   return __bfloat162float(x) < static_cast<float>(y);
@@ -248,6 +255,18 @@ __forceinline__ __device__ bool operator!=(__nv_bfloat16 x, T y) {
 
 __forceinline__ __device__ __half operator+(__half x, float y) {
   return __float2half(__half2float(x) + y);
+}
+
+__forceinline__ __device__ __half operator+(float y, __half x) {
+  return y + x;
+}
+
+__forceinline__ __device__ __half operator*(__half x, float y) {
+  return __float2half(__half2float(x) * y);
+}
+
+__forceinline__ __device__ __half operator*(float y, __half x) {
+  return y * x;
 }
 
 template <typename T>
