@@ -23,11 +23,11 @@ namespace mlx::core::mxcuda {
       uint16_t value = BF16_VALUE;                                    \
       return __builtin_bit_cast(__nv_bfloat16, value);                \
     } else {                                                          \
-      return __VA_ARGS__();                                           \
+      __VA_ARGS__                                                     \
     }                                                                 \
   }
 
-MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, []() -> T {
+MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, {
   if constexpr (cuda::std::is_same_v<T, cuComplex>) {
     return cuComplex{0, 0};
   } else {
@@ -35,7 +35,7 @@ MLX_DEFINE_CONSTEXPR_VALUE(zero_value, 0x0000, 0x0000, []() -> T {
   }
 })
 
-MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, []() -> T {
+MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, {
   if constexpr (cuda::std::is_same_v<T, cuComplex>) {
     return cuComplex{1, 1};
   } else {
@@ -43,19 +43,19 @@ MLX_DEFINE_CONSTEXPR_VALUE(one_value, 0x3C00, 0x3F80, []() -> T {
   }
 })
 
-MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, []() -> T {
+MLX_DEFINE_CONSTEXPR_VALUE(infinite_value, 0x7C00, 0x7F80, {
   return cuda::std::numeric_limits<T>::infinity();
 })
 
-MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, []() {
+MLX_DEFINE_CONSTEXPR_VALUE(negative_infinite_value, 0xFC00, 0xFF80, {
   return -cuda::std::numeric_limits<T>::infinity();
 })
 
-MLX_DEFINE_CONSTEXPR_VALUE(finite_max_value, 0x7BFF, 0x7F7F, []() {
+MLX_DEFINE_CONSTEXPR_VALUE(finite_max_value, 0x7BFF, 0x7F7F, {
   return cuda::std::numeric_limits<T>::max();
 })
 
-MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, []() {
+MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, {
   return cuda::std::numeric_limits<T>::min();
 })
 
@@ -151,13 +151,13 @@ __forceinline__ __device__ T fmod(T x, T y) {
 
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
 
-#define MLX_DEFINE_BF16_OP(OP)                          \
+#define MLX_DEFINE_BF16_OP(OP)                                           \
   __forceinline__ __device__ __nv_bfloat16 operator OP(                  \
       __nv_bfloat16 x, __nv_bfloat16 y) {                                \
     return __float2bfloat16(__bfloat162float(x) OP __bfloat162float(y)); \
   }
 
-#define MLX_DEFINE_BF16_CMP(OP)                             \
+#define MLX_DEFINE_BF16_CMP(OP)                                          \
   __forceinline__ __device__ bool operator OP(                           \
       __nv_bfloat16 x, __nv_bfloat16 y) {                                \
     return __float2bfloat16(__bfloat162float(x) OP __bfloat162float(y)); \
@@ -181,21 +181,21 @@ MLX_DEFINE_BF16_CMP(<=)
 // Additional C++ operator overrides between half types and native types.
 ///////////////////////////////////////////////////////////////////////////////
 
-#define MLX_DEFINE_HALF_OP(HALF, HALF2FLOAT, FLOAT2HALF, OP) \
-  template <                                                                  \
-      typename T,                                                             \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>>      \
-  __forceinline__ __device__ HALF operator OP(HALF x, T y) {                  \
-    return FLOAT2HALF(HALF2FLOAT(x) OP static_cast<float>(y));                \
-  }                                                                           \
-  template <                                                                  \
-      typename T,                                                             \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>>      \
-  __forceinline__ __device__ bool operator OP(T x, HALF y) {                  \
-    return FLOAT2HALF(static_cast<float>(x) OP HALF2FLOAT(y));                \
+#define MLX_DEFINE_HALF_OP(HALF, HALF2FLOAT, FLOAT2HALF, OP)             \
+  template <                                                             \
+      typename T,                                                        \
+      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
+  __forceinline__ __device__ HALF operator OP(HALF x, T y) {             \
+    return FLOAT2HALF(HALF2FLOAT(x) OP static_cast<float>(y));           \
+  }                                                                      \
+  template <                                                             \
+      typename T,                                                        \
+      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
+  __forceinline__ __device__ bool operator OP(T x, HALF y) {             \
+    return FLOAT2HALF(static_cast<float>(x) OP HALF2FLOAT(y));           \
   }
 
-#define MLX_DEFINE_HALF_CMP(HALF, HALF2FLOAT, OP)           \
+#define MLX_DEFINE_HALF_CMP(HALF, HALF2FLOAT, OP)                        \
   template <                                                             \
       typename T,                                                        \
       typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
