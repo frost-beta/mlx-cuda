@@ -5,11 +5,26 @@
 #include "mlx/backend/cuda/kernels/unary_ops.cuh"
 #include "mlx/primitives.h"
 
+#include <thrust/device_ptr.h>
+#include <thrust/transform.h>
+
 namespace mlx::core {
 
 namespace {
 
-template <typename T>
+template <typename Op, typename In, typename Out>
+constexpr bool is_supported_unary_op() {
+  if (std::is_same_v<Op, mxcuda::Log> || std::is_same_v<Op, mxcuda::Log2> ||
+      std::is_same_v<Op, mxcuda::Log10> || std::is_same_v<Op, mxcuda::Log1p>) {
+    return std::is_same_v<In, Out> && is_floating_v<In>;
+  } else if (std::is_same_v<Op, mxcuda::Round>) {
+    return std::is_same_v<In, Out> &&
+        (is_floating_v<In> || std::is_same_v<In, complex64_t>);
+  }
+  return false;
+}
+
+template <typename Op>
 void unary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
@@ -39,7 +54,38 @@ void unary_op_gpu_inplace(
   }
   int work_per_thread = !contig && large ? 4 : 1;
 
-  throw std::runtime_error("Unary op not implemented for CUDA backend.");
+  std::ignore = work_per_thread;
+
+  auto& encoder = mxcuda::get_command_encoder(s);
+  encoder.set_input_array(in);
+  encoder.set_output_array(out);
+  if (!contig) {
+    throw std::runtime_error(fmt::format(
+        "General unary op {} not implemented for CUDA backend.", op));
+  } else {
+    encoder.launch_thrust([&](auto policy) {
+      MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
+        MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
+          if constexpr (is_supported_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
+            using InType = cuda_type_t<CTYPE_IN>;
+            using OutType = cuda_type_t<CTYPE_OUT>;
+            thrust::transform(
+                policy,
+                thrust::device_pointer_cast(in.data<InType>()),
+                thrust::device_pointer_cast(in.data<InType>() + in.data_size()),
+                thrust::device_pointer_cast(out.data<OutType>()),
+                Op());
+          } else {
+            throw std::runtime_error(fmt::format(
+                "Can not do unary op {} on input of {} with output of {}.",
+                op,
+                dtype_to_string(in.dtype()),
+                dtype_to_string(out.dtype())));
+          }
+        });
+      });
+    });
+  }
 }
 
 template <typename Op>
@@ -68,10 +114,11 @@ void unary_op_gpu(
 
 } // namespace
 
-#define UNARY_GPU(func)                                                     \
-  void func::eval_gpu(const std::vector<array>& inputs, array& out) {       \
-    auto& s = out.primitive().stream();                                     \
-    unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
+#define UNARY_GPU(func)                                                        \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) {          \
+    auto& s = out.primitive().stream();                                        \
+    /* unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
+     */                                                                        \
   }
 
 UNARY_GPU(Abs)

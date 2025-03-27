@@ -59,6 +59,58 @@ MLX_DEFINE_CONSTEXPR_VALUE(finite_min_value, 0xFBFF, 0xFF7F, []() {
 #undef MLX_DEFINE_CONSTEXPR_VALUE
 
 template <typename T>
+__forceinline__ __device__ T log(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return hlog(x);
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return hlog(x);
+#endif
+  } else {
+    return ::log(x);
+  }
+}
+
+template <typename T>
+__forceinline__ __device__ T log2(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return hlog2(x);
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return hlog2(x);
+#endif
+  } else {
+    return ::log2(x);
+  }
+}
+
+template <typename T>
+__forceinline__ __device__ T log10(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return hlog10(x);
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return hlog10(x);
+#endif
+  } else {
+    return ::log10(x);
+  }
+}
+
+template <typename T>
+__forceinline__ __device__ T log1p(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return hlog1p(x);
+#if __CUDA_ARCH__ >= 800
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return hlog1p(x);
+#endif
+  } else {
+    return ::log1p(x);
+  }
+}
+
+template <typename T>
 __forceinline__ __device__ bool isnan(T x) {
   if constexpr (cuda::std::is_same_v<T, __half>) {
     return __hisnan(x);
@@ -81,6 +133,17 @@ __forceinline__ __device__ T fmod(T x, T y) {
 #endif
   } else {
     return ::fmod(x, y);
+  }
+}
+
+template <typename T>
+__forceinline__ __device__ T rint(T x) {
+  if constexpr (cuda::std::is_same_v<T, __half>) {
+    return __float2half(::rint(__half2float(x)));
+  } else if constexpr (cuda::std::is_same_v<T, __nv_bfloat16>) {
+    return __float2bfloat16(::rint(__bfloat162float(x)));
+  } else {
+    return ::rint(x);
   }
 }
 

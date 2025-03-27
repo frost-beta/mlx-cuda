@@ -11,11 +11,6 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
-inline constexpr bool is_floating_v =
-    std::is_same_v<T, float> || std::is_same_v<T, double> ||
-    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
-
 template <typename Op, typename In, typename Out>
 constexpr bool is_supported_binary_op() {
   if (std::is_same_v<Op, mxcuda::Add> || std::is_same_v<Op, mxcuda::Divide> ||

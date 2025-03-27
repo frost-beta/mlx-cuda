@@ -9,9 +9,14 @@
 
 namespace mlx::core {
 
-void check_cuda_error(const char* name, cudaError_t err);
+template <typename T>
+inline constexpr bool is_floating_v =
+    std::is_same_v<T, float> || std::is_same_v<T, double> ||
+    std::is_same_v<T, float16_t> || std::is_same_v<T, bfloat16_t>;
 
 // Throw exception if the cuda API does not succeed.
+void check_cuda_error(const char* name, cudaError_t err);
+
 #define CHECK_CUDA_ERROR(cmd) check_cuda_error(#cmd, (cmd))
 
 // Return the 3d block_dim fit for total_threads.
