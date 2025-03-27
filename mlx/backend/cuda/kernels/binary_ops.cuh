@@ -60,7 +60,7 @@ struct Remainder {
   operator()(T x, T y) {
     T r = fmod(x, y);
     if (r != 0 && (r < 0 != y < 0)) {
-      r += y;
+      r = r + y;
     }
     return r;
   }
