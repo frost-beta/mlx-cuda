@@ -5,7 +5,6 @@
 #include "mlx/backend/cuda/kernels/utils.cuh"
 
 #include <thrust/iterator/iterator_adaptor.h>
-#include <thrust/iterator/iterator_facade.h>
 #include <cuda/std/utility>
 
 namespace mlx::core::mxcuda {
@@ -73,7 +72,8 @@ class general_iterator
     return other.index() - this->index();
   }
 
-  __host__ __device__ typename super_t::reference dereference() const {
+  // The dereference is device-only to avoid accidental running in host.
+  __device__ typename super_t::reference dereference() const {
     IdxT offset = elem_to_loc(index_, shape_.data(), strides_.data(), ndim_);
     return *(this->base() + offset);
   }
