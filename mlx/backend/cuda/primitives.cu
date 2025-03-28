@@ -63,12 +63,15 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   encoder.launch_thrust([&, this](auto policy) {
     MLX_SWITCH_INT_FLOAT_TYPES_CHECKED(out.dtype(), "Arange", CTYPE, [&]() {
       using OutType = cuda_type_t<CTYPE>;
+      CTYPE step =
+          static_cast<CTYPE>(start_ + step_) - static_cast<CTYPE>(start_);
       thrust::transform(
           policy,
           thrust::counting_iterator<uint32_t>(0),
           thrust::counting_iterator<uint32_t>(out.data_size()),
           thrust::device_pointer_cast(out.data<OutType>()),
-          mxcuda::make_arange<OutType>(start_, start_ + step_));
+          mxcuda::Arange<OutType>{
+              static_cast<OutType>(start_), static_cast<OutType>(step)});
     });
   });
 }
