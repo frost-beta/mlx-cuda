@@ -66,7 +66,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
       thrust::transform(
           policy,
           thrust::counting_iterator<uint32_t>(0),
-          thrust::counting_iterator<uint32_t>(out.size()),
+          thrust::counting_iterator<uint32_t>(out.data_size()),
           thrust::device_pointer_cast(out.data<OutType>()),
           mxcuda::make_arange<OutType>(start_, start_ + step_));
     });

@@ -22,12 +22,6 @@ void check_cuda_error(const char* name, cudaError_t err);
 // Return the 3d block_dim fit for total_threads.
 dim3 get_block_dim(dim3 total_threads, int pow2 = 10);
 
-// Return the 2d block_dim needed for 1d block of num_threads.
-dim3 get_2d_num_blocks(
-    const Shape& shape,
-    const Strides& strides,
-    size_t num_threads);
-
 std::string get_primitive_string(Primitive* primitive);
 
 } // namespace mlx::core
