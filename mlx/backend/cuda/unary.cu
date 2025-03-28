@@ -66,7 +66,6 @@ void unary_op_gpu_inplace(
     const std::string& op,
     const Stream& s) {
   auto& in = inputs[0];
-  bool contig = in.flags().contiguous;
   if (in.size() == 0) {
     return;
   }
@@ -80,7 +79,7 @@ void unary_op_gpu_inplace(
         if constexpr (is_supported_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          if (contig) {
+          if (in.flags().contiguous) {
             thrust::transform(
                 policy,
                 thrust::device_pointer_cast(in.data<InType>()),
@@ -116,8 +115,7 @@ void unary_op_gpu(
     const std::string& op,
     const Stream& s) {
   auto& in = inputs[0];
-  bool contig = in.flags().contiguous;
-  if (contig) {
+  if (in.flags().contiguous) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(in);
     } else {

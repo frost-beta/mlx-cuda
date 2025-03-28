@@ -4,11 +4,6 @@
 
 namespace mlx::core::mxcuda {
 
-using cuda::std::enable_if_t;
-using cuda::std::is_integral_v;
-using cuda::std::is_same_v;
-using cuda::std::is_signed_v;
-
 struct Add {
   template <typename T>
   __device__ T operator()(T x, T y) {
@@ -38,36 +33,26 @@ struct Divide {
 
 struct Remainder {
   template <typename T>
-  __device__ enable_if_t<is_integral_v<T> & !is_signed_v<T>, T> operator()(
-      T x,
-      T y) {
-    return x % y;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_integral_v<T> & is_signed_v<T>, T> operator()(
-      T x,
-      T y) {
-    auto r = x % y;
-    if (r != 0 && (r < 0 != y < 0)) {
-      r += y;
+  __device__ T operator()(T x, T y) {
+    if constexpr (cuda::std::is_integral_v<T>) {
+      if constexpr (cuda::std::is_signed_v<T>) {
+        auto r = x % y;
+        if (r != 0 && (r < 0 != y < 0)) {
+          r += y;
+        }
+        return r;
+      } else {
+        return x % y;
+      }
+    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      return x % y;
+    } else {
+      T r = fmod(x, y);
+      if (r != 0 && (r < 0 != y < 0)) {
+        r = r + y;
+      }
+      return r;
     }
-    return r;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
-  operator()(T x, T y) {
-    T r = fmod(x, y);
-    if (r != 0 && (r < 0 != y < 0)) {
-      r = r + y;
-    }
-    return r;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
-    return x % y;
   }
 };
 
@@ -140,49 +125,39 @@ struct LogAddExp {
 
 struct Maximum {
   template <typename T>
-  __device__ enable_if_t<is_integral_v<T>, T> operator()(T x, T y) {
-    return max(x, y);
-  }
-
-  template <typename T>
-  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
-  operator()(T x, T y) {
-    if (isnan(x)) {
-      return x;
+  __device__ T operator()(T x, T y) {
+    if constexpr (cuda::std::is_integral_v<T>) {
+      return max(x, y);
+    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
+        return x;
+      }
+      return x > y ? x : y;
+    } else {
+      if (isnan(x)) {
+        return x;
+      }
+      return x > y ? x : y;
     }
-    return x > y ? x : y;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
-    if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
-      return x;
-    }
-    return x > y ? x : y;
   }
 };
 
 struct Minimum {
   template <typename T>
-  __device__ enable_if_t<is_integral_v<T>, T> operator()(T x, T y) {
-    return min(x, y);
-  }
-
-  template <typename T>
-  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
-  operator()(T x, T y) {
-    if (isnan(x)) {
-      return x;
+  __device__ T operator()(T x, T y) {
+    if constexpr (cuda::std::is_integral_v<T>) {
+      return min(x, y);
+    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
+        return x;
+      }
+      return x < y ? x : y;
+    } else {
+      if (isnan(x)) {
+        return x;
+      }
+      return x < y ? x : y;
     }
-    return x < y ? x : y;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
-    if (isnan(cuCrealf(x)) || isnan(cuCimagf(x))) {
-      return x;
-    }
-    return x < y ? x : y;
   }
 };
 
@@ -206,32 +181,26 @@ struct NotEqual {
 
 struct Power {
   template <typename T>
-  __device__ enable_if_t<!is_integral_v<T> && !is_same_v<T, cuComplex>, T>
-  operator()(T base, T exp) {
-    return powf(base, exp);
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_integral_v<T>, T> operator()(T base, T exp) {
-    T res = 1;
-    while (exp) {
-      if (exp & 1) {
-        res *= base;
+  __device__ T operator()(T base, T exp) {
+    if constexpr (cuda::std::is_integral_v<T>) {
+      T res = 1;
+      while (exp) {
+        if (exp & 1) {
+          res *= base;
+        }
+        exp >>= 1;
+        base *= base;
       }
-      exp >>= 1;
-      base *= base;
+      return res;
+    } else if constexpr (cuda::std::is_same_v<T, cuComplex>) {
+      auto x_theta = atan2f(base.y, base.x);
+      auto x_ln_r = 0.5 * logf(base.x * base.x + base.y * base.y);
+      auto mag = expf(exp.x * x_ln_r - exp.y * x_theta);
+      auto phase = exp.y * x_ln_r + exp.x * x_theta;
+      return make_cuFloatComplex(mag * cosf(phase), mag * sinf(phase));
+    } else {
+      return powf(base, exp);
     }
-    return res;
-  }
-
-  template <typename T>
-  __device__ enable_if_t<is_same_v<T, cuComplex>, T> operator()(T x, T y) {
-    auto x_theta = atan2f(cuCimagf(x), cuCrealf(x));
-    auto x_ln_r =
-        0.5 * logf(cuCrealf(x) * cuCrealf(x) + cuCimagf(x) * cuCimagf(x));
-    auto mag = expf(cuCrealf(y) * x_ln_r - cuCimagf(y) * x_theta);
-    auto phase = cuCimagf(y) * x_ln_r + cuCrealf(y) * x_theta;
-    return make_cuFloatComplex(mag * cosf(phase), mag * sinf(phase));
   }
 };
 

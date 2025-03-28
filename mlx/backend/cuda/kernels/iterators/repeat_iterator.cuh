@@ -6,7 +6,7 @@
 
 namespace mlx::core::mxcuda {
 
-// Always return the same iterator after advancements.
+// Always return the value of initial iterator after advancements.
 template <typename Iterator>
 class repeat_iterator
     : public thrust::iterator_adaptor<repeat_iterator<Iterator>, Iterator> {
@@ -15,14 +15,17 @@ class repeat_iterator
   using reference = typename super_t::reference;
   using difference_type = typename super_t::difference_type;
 
-  using super_t::super_t;
+  __host__ __device__ repeat_iterator(Iterator it) : super_t(it), it_(it) {}
 
  private:
   friend class thrust::iterator_core_access;
 
-  __host__ __device__ void advance(difference_type n) {}
-  __host__ __device__ void increment() {}
-  __host__ __device__ void decrement() {}
+  // The dereference is device-only to avoid accidental running in host.
+  __device__ typename super_t::reference dereference() const {
+    return *it_;
+  }
+
+  Iterator it_;
 };
 
 template <typename Iterator>

@@ -3,9 +3,14 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
-#include "mlx/backend/cuda/kernels/binary.cuh"
-#include "mlx/backend/cuda/kernels/utils.cuh"
+#include "mlx/backend/cuda/kernels/binary_ops.cuh"
+#include "mlx/backend/cuda/kernels/iterators/general_iterator.cuh"
+#include "mlx/backend/cuda/kernels/iterators/repeat_iterator.cuh"
 #include "mlx/primitives.h"
+
+#include <thrust/copy.h>
+#include <thrust/device_ptr.h>
+#include <thrust/transform.h>
 
 namespace mlx::core {
 
@@ -63,79 +68,49 @@ void binary_op_gpu_inplace(
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
-  auto bopt = get_binary_op_type(a, b);
-
   auto& out = outputs[0];
   if (out.size() == 0) {
     return;
   }
 
-  // Try to collapse contiguous dims
-  auto maybe_collapse = [bopt, &a, &b, &out]() {
-    if (bopt == BinaryOpType::General) {
-      auto [shape, strides] = collapse_contiguous_dims(a, b, out);
-      return std::make_tuple(shape, strides[0], strides[1], strides[2]);
-    } else {
-      decltype(a.strides()) e{};
-      return std::make_tuple(decltype(a.shape()){}, e, e, e);
-    }
-  };
-  auto [shape, strides_a, strides_b, strides_out] = maybe_collapse();
-
-  bool large;
-  auto ndim = shape.size();
-  int work_per_thread;
-  if (bopt == BinaryOpType::General) {
-    large = a.data_size() > INT32_MAX || b.data_size() > INT32_MAX ||
-        out.size() > INT32_MAX;
-    work_per_thread = large ? 4 : 2;
-  } else {
-    large = out.data_size() > UINT32_MAX;
-    work_per_thread = 1;
-  }
-
-  std::ignore = work_per_thread;
-
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(a, b);
-  for (auto& out : outputs) {
-    encoder.set_output_array(out);
-  }
-  encoder.launch_kernel([&](cudaStream_t stream) {
+  encoder.set_output_array(out);
+  encoder.launch_thrust([&](auto policy) {
     MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, [&]() {
       MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         if constexpr (is_supported_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          if (bopt == BinaryOpType::General) {
+          auto bopt = get_binary_op_type(a, b);
+          auto a_ptr = thrust::device_pointer_cast(a.data<InType>());
+          auto b_ptr = thrust::device_pointer_cast(b.data<InType>());
+          auto out_begin = thrust::device_pointer_cast(out.data<OutType>());
+
+          if (bopt == BinaryOpType::ScalarScalar) {
+            auto a_begin = mxcuda::make_repeat_iterator(a_ptr);
+            auto a_end = a_begin + out.data_size();
+            auto b_begin = mxcuda::make_repeat_iterator(b_ptr);
+            thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
+          } else if (bopt == BinaryOpType::ScalarVector) {
+            auto a_begin = mxcuda::make_repeat_iterator(a_ptr);
+            auto a_end = a_begin + out.data_size();
+            auto b_begin = b_ptr;
+            thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
+          } else if (bopt == BinaryOpType::VectorScalar) {
+            auto a_begin = a_ptr;
+            auto a_end = a_begin + out.data_size();
+            auto b_begin = mxcuda::make_repeat_iterator(b_ptr);
+            thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
+          } else if (bopt == BinaryOpType::VectorVector) {
+            auto a_begin = a_ptr;
+            auto a_end = a_begin + out.data_size();
+            auto b_begin = b_ptr;
+            thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
+          } else {
+            auto [shape, strides] = collapse_contiguous_dims(a, b, out);
             throw std::runtime_error(
                 "General binary op not implemented for CUDA backend.");
-          } else {
-            int num_threads = std::min(
-                out.data_size(), mxcuda::max_threads_per_block(s.device));
-            dim3 num_blocks = large
-                ? get_2d_num_blocks(out.shape(), out.strides(), num_threads)
-                : dim3(ceil_div(out.data_size(), num_threads));
-            decltype(&mxcuda::binary_ss<Op, InType, OutType>) kernel;
-            switch (bopt) {
-              case BinaryOpType::ScalarScalar:
-                kernel = &mxcuda::binary_ss<Op, InType, OutType>;
-                break;
-              case BinaryOpType::ScalarVector:
-                kernel = &mxcuda::binary_sv<Op, InType, OutType>;
-                break;
-              case BinaryOpType::VectorScalar:
-                kernel = &mxcuda::binary_vs<Op, InType, OutType>;
-                break;
-              case BinaryOpType::VectorVector:
-                kernel = &mxcuda::binary_vv<Op, InType, OutType>;
-                break;
-            }
-            kernel<<<num_blocks, num_threads, 0, stream>>>(
-                a.data<InType>(),
-                b.data<InType>(),
-                out.data<OutType>(),
-                out.data_size());
           }
         } else {
           throw std::runtime_error(fmt::format(
