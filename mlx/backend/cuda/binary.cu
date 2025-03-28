@@ -82,11 +82,11 @@ void binary_op_gpu_inplace(
         if constexpr (is_supported_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
-          auto bopt = get_binary_op_type(a, b);
           auto a_ptr = thrust::device_pointer_cast(a.data<InType>());
           auto b_ptr = thrust::device_pointer_cast(b.data<InType>());
           auto out_begin = thrust::device_pointer_cast(out.data<OutType>());
 
+          auto bopt = get_binary_op_type(a, b);
           if (bopt == BinaryOpType::ScalarScalar) {
             auto a_begin = mxcuda::make_repeat_iterator(a_ptr);
             auto a_end = a_begin + out.data_size();
@@ -109,8 +109,17 @@ void binary_op_gpu_inplace(
             thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
           } else {
             auto [shape, strides] = collapse_contiguous_dims(a, b, out);
-            throw std::runtime_error(
-                "General binary op not implemented for CUDA backend.");
+            auto [a_begin, a_end] = mxcuda::make_general_iterators<int64_t>(
+                a_ptr,
+                out.data_size(),
+                shape,
+                strides[0]);
+            auto [b_begin, b_end] = mxcuda::make_general_iterators<int64_t>(
+                b_ptr,
+                out.data_size(),
+                shape,
+                strides[1]);
+            thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
           }
         } else {
           throw std::runtime_error(fmt::format(

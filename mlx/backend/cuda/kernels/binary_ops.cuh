@@ -14,12 +14,10 @@ struct Add {
 struct FloorDivide {
   template <typename T>
   __device__ T operator()(T x, T y) {
-    if constexpr (
-        is_same_v<T, float> || is_same_v<T, __half> ||
-        is_same_v<T, __nv_bfloat16>) {
-      return trunc(x / y);
-    } else {
+    if constexpr (cuda::std::is_integral_v<T>) {
       return x / y;
+    } else {
+      return trunc(x / y);
     }
   }
 };
