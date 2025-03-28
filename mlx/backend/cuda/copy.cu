@@ -3,6 +3,7 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
+#include "mlx/backend/cuda/kernels/iterators/general_iterator.cuh"
 #include "mlx/backend/cuda/kernels/iterators/repeat_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/backend/metal/copy.h"
@@ -65,8 +66,22 @@ void copy_gpu_inplace(
                 /* size_cap = */ INT32_MAX);
             auto& strides_in_collapsed = strides_vec[0];
             auto& strides_out_collapsed = strides_vec[1];
-            throw std::runtime_error(
-                "General copy not implemented for CUDA backend.");
+            if (ctype == CopyType::General) {
+              thrust::copy_n(
+                  policy,
+                  mxcuda::make_general_iterator<int64_t>(
+                      in_ptr, shape_collapsed, strides_in_collapsed),
+                  out.data_size(),
+                  out_ptr);
+            } else {
+              thrust::copy_n(
+                  policy,
+                  mxcuda::make_general_iterator<int64_t>(
+                      in_ptr, shape_collapsed, strides_in_collapsed),
+                  out.data_size(),
+                  mxcuda::make_general_iterator<int64_t>(
+                      out_ptr, shape_collapsed, strides_in_collapsed));
+            }
           }
         } else {
           throw std::runtime_error(fmt::format(

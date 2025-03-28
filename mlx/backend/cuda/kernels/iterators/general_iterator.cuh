@@ -96,8 +96,16 @@ __host__ __device__ auto make_general_iterator(
 }
 
 template <typename IdxT, typename Iterator>
-std::pair<general_iterator<Iterator, IdxT>, general_iterator<Iterator, IdxT>>
-make_general_iterators(
+auto make_general_iterator(
+    Iterator it,
+    const std::vector<int32_t>& shape,
+    const std::vector<int64_t>& strides) {
+  return make_general_iterator<IdxT>(
+      it, 0, shape.size(), const_param(shape), const_param(strides));
+}
+
+template <typename IdxT, typename Iterator>
+auto make_general_iterators(
     Iterator it,
     IdxT size,
     const std::vector<int32_t>& shape,
