@@ -207,6 +207,10 @@ void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Copy::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 void CustomTransforms::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -319,7 +323,6 @@ NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Concatenate)
 NO_GPU(Convolution)
-NO_GPU(Copy)
 NO_GPU_MULTI(DivMod)
 NO_GPU(DynamicSlice)
 NO_GPU(DynamicSliceUpdate)
