@@ -3,7 +3,6 @@
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
-#include "mlx/backend/cuda/kernels/copy.cuh"
 #include "mlx/backend/cuda/kernels/iterators/repeat_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/backend/metal/copy.h"
@@ -18,9 +17,9 @@ namespace mlx::core {
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const Shape& data_shape,
-    const Strides& strides_in_pre,
-    const Strides& strides_out_pre,
+    const Shape& shape,
+    const Strides& strides_in,
+    const Strides& strides_out,
     int64_t inp_offset,
     int64_t out_offset,
     CopyType ctype,
@@ -30,62 +29,49 @@ void copy_gpu_inplace(
   if (out.size() == 0) {
     return;
   }
-  // Try to collapse contiguous dims
-  auto maybe_collapse =
-      [ctype, &data_shape, &strides_in_pre, &strides_out_pre]() {
-        if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-          auto [shape, strides] = collapse_contiguous_dims(
-              data_shape,
-              std::vector{strides_in_pre, strides_out_pre},
-              /* size_cap = */ INT32_MAX);
-          return std::make_tuple(shape, strides[0], strides[1]);
-        } else {
-          Strides e{};
-          return std::make_tuple(Shape{}, e, e);
-        }
-      };
-  auto [shape, strides_in_, strides_out_] = maybe_collapse();
-  int ndim = shape.size();
-  bool large;
-  if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    // Allow for negative strides
-    large = in.data_size() > INT32_MAX || out.data_size() > INT32_MAX;
-  } else {
-    large = out.data_size() > UINT32_MAX;
-  }
-  bool dynamic = dynamic_i_offset || dynamic_o_offset;
-
-  bool donate_in = in.data_shared_ptr() == nullptr;
-  const array& input = donate_in ? out : in;
+  // TODO: Figure out how to handle donated input.
+  assert(in.data_shared_ptr() != nullptr);
 
   auto& encoder = mxcuda::get_command_encoder(s);
-  encoder.set_input_array(input);
+  encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_CUDA_TYPES(input.dtype(), CTYPE_IN, [&]() {
-      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE_OUT, [&]() {
-        if constexpr (std::is_convertible_v<CTYPE_IN, CTYPE_OUT>) {
-          if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+  encoder.launch_thrust([&](auto policy) {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
+      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
+        using InType = cuda_type_t<CTYPE_IN>;
+        using OutType = cuda_type_t<CTYPE_OUT>;
+        if constexpr (std::is_convertible_v<InType, OutType>) {
+          auto in_ptr =
+              thrust::device_pointer_cast(in.data<InType>() + inp_offset);
+          auto out_ptr =
+              thrust::device_pointer_cast(out.data<OutType>() + out_offset);
+          if (ctype == CopyType::Scalar) {
+            thrust::copy_n(
+                policy,
+                mxcuda::make_repeat_iterator(in_ptr),
+                out.data_size(),
+                out_ptr);
+          } else if (ctype == CopyType::Vector) {
+            thrust::copy_n(policy, in_ptr, out.data_size(), out_ptr);
+          } else {
+            bool dynamic = dynamic_i_offset || dynamic_o_offset;
+            if (dynamic) {
+              throw std::runtime_error(
+                  "Dynamic copy not implemented for CUDA backend.");
+            }
+            auto [shape_collapsed, strides_vec] = collapse_contiguous_dims(
+                shape,
+                std::vector{strides_in, strides_out},
+                /* size_cap = */ INT32_MAX);
+            auto& strides_in_collapsed = strides_vec[0];
+            auto& strides_out_collapsed = strides_vec[1];
             throw std::runtime_error(
                 "General copy not implemented for CUDA backend.");
-          } else {
-            int num_threads = std::min(
-                out.data_size(), mxcuda::max_threads_per_block(s.device));
-            dim3 num_blocks = large
-                ? get_2d_num_blocks(out.shape(), out.strides(), num_threads)
-                : dim3(ceil_div(out.data_size(), num_threads));
-            auto kernel = ctype == CopyType::Scalar
-                ? &mxcuda::copy_s<CTYPE_IN, CTYPE_OUT>
-                : &mxcuda::copy_v<CTYPE_IN, CTYPE_OUT>;
-            kernel<<<num_blocks, num_threads, 0, stream>>>(
-                input.data<CTYPE_IN>() + inp_offset,
-                out.data<CTYPE_OUT>() + out_offset,
-                out.data_size());
           }
         } else {
           throw std::runtime_error(fmt::format(
               "Can not copy data from dtype {} to {}",
-              dtype_to_string(input.dtype()),
+              dtype_to_string(in.dtype()),
               dtype_to_string(out.dtype())));
         }
       });
@@ -102,15 +88,17 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   encoder.set_input_array(val);
   encoder.set_output_array(out);
   encoder.launch_thrust([&](auto policy) {
-    MLX_SWITCH_CUDA_TYPES(val.dtype(), CTYPE_IN, [&]() {
-      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE_OUT, [&]() {
-        if constexpr (std::is_convertible_v<CTYPE_IN, CTYPE_OUT>) {
+    MLX_SWITCH_ALL_TYPES(val.dtype(), CTYPE_IN, [&]() {
+      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
+        using InType = cuda_type_t<CTYPE_IN>;
+        using OutType = cuda_type_t<CTYPE_OUT>;
+        if constexpr (std::is_convertible_v<InType, OutType>) {
           thrust::copy_n(
               policy,
               mxcuda::make_repeat_iterator(
-                  thrust::device_pointer_cast(val.data<CTYPE_IN>())),
-              out.size(),
-              thrust::device_pointer_cast(out.data<CTYPE_OUT>()));
+                  thrust::device_pointer_cast(val.data<InType>())),
+              out.data_size(),
+              thrust::device_pointer_cast(out.data<OutType>()));
         } else {
           throw std::runtime_error(fmt::format(
               "Can not fill data of dtype {} with {}",

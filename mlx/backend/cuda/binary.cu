@@ -110,15 +110,9 @@ void binary_op_gpu_inplace(
           } else {
             auto [shape, strides] = collapse_contiguous_dims(a, b, out);
             auto [a_begin, a_end] = mxcuda::make_general_iterators<int64_t>(
-                a_ptr,
-                out.data_size(),
-                shape,
-                strides[0]);
+                a_ptr, out.data_size(), shape, strides[0]);
             auto [b_begin, b_end] = mxcuda::make_general_iterators<int64_t>(
-                b_ptr,
-                out.data_size(),
-                shape,
-                strides[1]);
+                b_ptr, out.data_size(), shape, strides[1]);
             thrust::transform(policy, a_begin, a_end, b_begin, out_begin, Op());
           }
         } else {
