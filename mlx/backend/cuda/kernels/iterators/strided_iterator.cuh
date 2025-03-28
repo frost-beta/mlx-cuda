@@ -6,8 +6,6 @@
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/iterator_facade.h>
 
-#include <cuda/std/utility>
-
 namespace mlx::core::mxcuda {
 
 // RandomAccessIterator for strided access to array entries.
@@ -22,14 +20,10 @@ class strided_iterator
   using reference = typename super_t::reference;
   using difference_type = typename super_t::difference_type;
 
-  __host__ __device__ strided_iterator(Iterator it = {}, Stride stride = {})
-      : super_t(::cuda::std::move(it)), stride_(stride) {}
+  __host__ __device__ strided_iterator(Iterator it, Stride stride)
+      : super_t(it), stride_(stride) {}
 
-  __host__ __device__ const Stride& stride() const {
-    return stride_;
-  }
-
-  __host__ __device__ Stride& stride() {
+  __host__ __device__ Stride stride() const {
     return stride_;
   }
 
@@ -66,7 +60,7 @@ class strided_iterator
 
 template <typename Iterator, typename Stride>
 __host__ __device__ auto make_strided_iterator(Iterator it, Stride stride) {
-  return strided_iterator<Iterator, Stride>(it, {stride});
+  return strided_iterator<Iterator, Stride>(it, stride);
 }
 
 } // namespace mlx::core::mxcuda

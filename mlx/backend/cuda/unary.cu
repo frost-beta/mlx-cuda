@@ -2,6 +2,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/kernels/iterators/general_iterator.cuh"
 #include "mlx/backend/cuda/kernels/unary_ops.cuh"
 #include "mlx/primitives.h"
 
@@ -70,39 +71,16 @@ void unary_op_gpu_inplace(
     return;
   }
 
-  auto maybe_collapse = [contig, &in, &out]() {
-    if (!contig) {
-      return collapse_contiguous_dims(in);
-    } else {
-      return std::make_pair(Shape{}, Strides{});
-    }
-  };
-  auto [shape, strides] = maybe_collapse();
-  int ndim = shape.size();
-  size_t nthreads = contig ? in.data_size() : in.size();
-  bool large;
-  if (!contig) {
-    large = in.data_size() > INT32_MAX || out.size() > INT32_MAX;
-  } else {
-    large = in.data_size() > UINT32_MAX;
-  }
-  int work_per_thread = !contig && large ? 4 : 1;
-
-  std::ignore = work_per_thread;
-
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  if (!contig) {
-    throw std::runtime_error(fmt::format(
-        "General unary op {} not implemented for CUDA backend.", op));
-  } else {
-    encoder.launch_thrust([&](auto policy) {
-      MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
-        MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
-          if constexpr (is_supported_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
-            using InType = cuda_type_t<CTYPE_IN>;
-            using OutType = cuda_type_t<CTYPE_OUT>;
+  encoder.launch_thrust([&](auto policy) {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
+      MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
+        if constexpr (is_supported_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
+          using InType = cuda_type_t<CTYPE_IN>;
+          using OutType = cuda_type_t<CTYPE_OUT>;
+          if (contig) {
             thrust::transform(
                 policy,
                 thrust::device_pointer_cast(in.data<InType>()),
@@ -110,16 +88,25 @@ void unary_op_gpu_inplace(
                 thrust::device_pointer_cast(out.data<OutType>()),
                 Op());
           } else {
-            throw std::runtime_error(fmt::format(
-                "Can not do unary op {} on input of {} with output of {}.",
-                op,
-                dtype_to_string(in.dtype()),
-                dtype_to_string(out.dtype())));
+            auto [shape, strides] = collapse_contiguous_dims(in);
+            auto [in_begin, in_end] = mxcuda::make_general_iterators<int64_t>(
+                thrust::device_pointer_cast(in.data<InType>()),
+                in.data_size(),
+                shape,
+                strides);
+            auto out_begin = thrust::device_pointer_cast(out.data<OutType>());
+            thrust::transform(policy, in_begin, in_end, out_begin, Op());
           }
-        });
+        } else {
+          throw std::runtime_error(fmt::format(
+              "Can not do unary op {} on input of {} with output of {}.",
+              op,
+              dtype_to_string(in.dtype()),
+              dtype_to_string(out.dtype())));
+        }
       });
     });
-  }
+  });
 }
 
 template <typename Op>
@@ -148,7 +135,7 @@ void unary_op_gpu(
 
 } // namespace
 
-#define UNARY_GPU(func)                                         \
+#define UNARY_GPU(func)                                                     \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) {       \
     auto& s = out.primitive().stream();                                     \
     unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
