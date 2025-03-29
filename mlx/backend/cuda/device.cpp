@@ -10,19 +10,14 @@ namespace mlx::core {
 
 namespace mxcuda {
 
-size_t max_threads_per_block(Device device) {
-  cudaDeviceProp prop;
-  CHECK_CUDA_ERROR(cudaGetDeviceProperties(&prop, device.index));
-  return prop.maxThreadsPerBlock;
-}
-
-DeviceStream::DeviceStream(Stream stream) : device_(stream.device) {
-  set_cuda_device(device_);
+DeviceStream::DeviceStream(Stream stream) {
+  int device = stream.device.index;
+  set_cuda_device(device);
   CHECK_CUDA_ERROR(cudaStreamCreate(&stream_));
   // Validate the requirements of device.
   // TODO: Validate per-device instead of per-stream.
   int a = 0;
-  cudaDeviceGetAttribute(&a, cudaDevAttrConcurrentManagedAccess, device_.index);
+  cudaDeviceGetAttribute(&a, cudaDevAttrConcurrentManagedAccess, device);
   if (a != 1) {
     throw std::runtime_error(
         "Synchronization between CPU/GPU not supported for managed memory.");
@@ -59,8 +54,8 @@ void CommandEncoder::prefetch_memory(const array& arr) {
   size_t size = arr.data_size() * arr.itemsize();
   if (data && size > 0) {
     // TODO: Use a stream that maximizes parallelism.
-    CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
-        data, size, stream_.device().index, stream_.last_cuda_stream()));
+    CHECK_CUDA_ERROR(
+        cudaMemPrefetchAsync(data, size, device_, stream_.last_cuda_stream()));
   }
 }
 

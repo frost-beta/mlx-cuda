@@ -12,16 +12,13 @@ namespace mlx::core::mxcuda {
 
 // We need to set/get current CUDA device very frequently, cache it to reduce
 // actual calls of CUDA APIs. This function assumes single-thread in host.
-inline void set_cuda_device(Device device) {
+inline void set_cuda_device(int device) {
   static int device_ = 0;
-  if (device.index != device_) {
-    CHECK_CUDA_ERROR(cudaSetDevice(device.index));
-    device_ = device.index;
+  if (device != device_) {
+    CHECK_CUDA_ERROR(cudaSetDevice(device));
+    device_ = device;
   }
 }
-
-// Get the maxThreadsPerBlock property of device.
-size_t max_threads_per_block(Device device);
 
 // A stream in MLX consists of multiple CUDA stream.
 class DeviceStream {
@@ -38,18 +35,14 @@ class DeviceStream {
   // Run the function in host after last launched work finishes.
   void add_host_callback(std::function<void()> func);
 
-  const Device& device() const {
-    return device_;
-  }
-
  private:
-  Device device_;
   cudaStream_t stream_;
 };
 
 class CommandEncoder {
  public:
-  explicit CommandEncoder(Stream stream) : stream_(stream) {}
+  explicit CommandEncoder(Stream stream)
+      : device_(stream.device.index), stream_(stream) {}
 
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -97,7 +90,7 @@ class CommandEncoder {
  private:
   template <typename F>
   void launch_kernel_with(F&& fun, cudaStream_t stream) {
-    set_cuda_device(stream_.device());
+    set_cuda_device(device_);
     fun(stream);
     check_cuda_error("kernel launch", cudaGetLastError());
     if (!temporaries_.empty()) {
@@ -107,6 +100,7 @@ class CommandEncoder {
 
   void prefetch_memory(const array& arr);
 
+  int device_;
   DeviceStream stream_;
   std::vector<array> temporaries_;
 };
