@@ -25,9 +25,13 @@ target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 
 # Compute capability 7 is required for synchronization between CPU/GPU with
-# managed memory.
-# TODO: Add more architectures for potential performance gain.
-set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES "70;80")
+# managed memory. TODO: Add more architectures for potential performance gain.
+set(MLX_CUDA_ARCHITECTURES
+    "70;80"
+    CACHE STRING "CUDA architectures")
+message(STATUS "CUDA architectures: ${MLX_CUDA_ARCHITECTURES}")
+set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES
+                                     "${MLX_CUDA_ARCHITECTURES}")
 
 # Use fixed version of CCCL.
 FetchContent_Declare(
