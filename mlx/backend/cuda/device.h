@@ -9,23 +9,24 @@
 #include <cublasLt.h>
 #include <thrust/execution_policy.h>
 
+#include <unordered_map>
+
 namespace mlx::core::mxcuda {
 
-// We need to set/get current CUDA device very frequently, cache it to reduce
-// actual calls of CUDA APIs. This function assumes single-thread in host.
-inline void set_cuda_device(int device) {
-  static int device_ = 0;
-  if (device != device_) {
-    CHECK_CUDA_ERROR(cudaSetDevice(device));
-    device_ = device;
-  }
-}
+class Device;
+class CommandEncoder;
 
 // A stream in MLX consists of multiple CUDA stream.
 class DeviceStream {
  public:
-  explicit DeviceStream(Stream stream);
+  DeviceStream(Device& device, Stream stream);
   ~DeviceStream();
+
+  DeviceStream(const DeviceStream&) = delete;
+  DeviceStream& operator=(const DeviceStream&) = delete;
+
+  // Wait until all current tasks finish.
+  void synchronize();
 
   // Return a CUDA stream for launching kernels.
   cudaStream_t schedule_cuda_stream();
@@ -36,14 +37,48 @@ class DeviceStream {
   // Run the function in host after last launched work finishes.
   void add_host_callback(std::function<void()> func);
 
+  CommandEncoder& get_encoder();
+
+  Device& device() {
+    return device_;
+  }
+
  private:
+  Device& device_;
   cudaStream_t stream_;
+  std::unique_ptr<CommandEncoder> encoder_;
+};
+
+class Device {
+ public:
+  explicit Device(int device);
+  ~Device();
+
+  Device(const Device&) = delete;
+  Device& operator=(const Device&) = delete;
+
+  // Make this instance the current CUDA device, required by some CUDA calls.
+  void make_current();
+
+  DeviceStream& get_stream(Stream stream);
+
+  int cuda_device() const {
+    return device_;
+  }
+
+  cublasLtHandle_t lt_handle() const {
+    return lt_;
+  }
+
+ private:
+  int device_;
+  cublasLtHandle_t lt_;
+  std::unordered_map<int, DeviceStream> streams_;
 };
 
 class CommandEncoder {
  public:
-  explicit CommandEncoder(Stream stream)
-      : device_(stream.device.index), stream_(stream) {}
+  explicit CommandEncoder(DeviceStream& stream);
 
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
@@ -84,14 +119,10 @@ class CommandEncoder {
     });
   }
 
-  DeviceStream& stream() {
-    return stream_;
-  }
-
  private:
   template <typename F>
   void launch_kernel_with(F&& fun, cudaStream_t stream) {
-    set_cuda_device(device_);
+    device_.make_current();
     fun(stream);
     check_cuda_error("kernel launch", cudaGetLastError());
     if (!temporaries_.empty()) {
@@ -101,26 +132,12 @@ class CommandEncoder {
 
   void prefetch_memory(const array& arr);
 
-  int device_;
-  DeviceStream stream_;
+  Device& device_;
+  DeviceStream& stream_;
   std::vector<array> temporaries_;
 };
 
-class Device {
- public:
-  Device(int device);
-  ~Device();
-
-  cublasLtHandle_t lt_handle() const {
-    return lt_;
-  }
-
- private:
-  cublasLtHandle_t lt_;
-};
-
 Device& device(mlx::core::Device device);
-DeviceStream& get_stream(Stream stream);
 CommandEncoder& get_command_encoder(Stream stream);
 
 } // namespace mlx::core::mxcuda

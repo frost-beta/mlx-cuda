@@ -24,14 +24,10 @@ target_compile_definitions(mlx PUBLIC MLX_USE_CUDA)
 target_compile_options(mlx
                        PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 
-set_target_properties(
-  mlx
-  PROPERTIES CUDA_STANDARD 17
-             CUDA_SEPARABLE_COMPILATION ON
-             # Compute capability 7 is required for synchronization between
-             # CPU/GPU with managed memory.
-             # TODO: Add more architectures for release build.
-             CUDA_ARCHITECTURES "70;80")
+# Compute capability 7 is required for synchronization between CPU/GPU with
+# managed memory.
+# TODO: Add more architectures for potential performance gain.
+set_target_properties(mlx PROPERTIES CUDA_ARCHITECTURES "70;80")
 
 # Use fixed version of CCCL.
 FetchContent_Declare(
@@ -43,6 +39,9 @@ target_include_directories(mlx PRIVATE BEFORE "${cccl_SOURCE_DIR}/include")
 # Make CUDA APIs visible in .cpp files.
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
+
+# We are using cublasLt.
+target_link_libraries(mlx PRIVATE CUDA::cublasLt_static)
 
 # Suppress nvcc warnings on MLX headers.
 target_compile_options(mlx PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Xcudafe

@@ -5,20 +5,23 @@
 #include "mlx/backend/metal/metal.h"
 
 #include <fmt/format.h>
-#include <unordered_map>
 
 namespace mlx::core {
 
 namespace mxcuda {
 
-DeviceStream::DeviceStream(Stream stream) {
-  int device = stream.device.index;
-  set_cuda_device(device);
+DeviceStream::DeviceStream(Device& device, Stream stream) : device_(device) {
+  device_.make_current();
   CHECK_CUDA_ERROR(cudaStreamCreate(&stream_));
 }
 
 DeviceStream::~DeviceStream() {
   CHECK_CUDA_ERROR(cudaStreamDestroy(stream_));
+}
+
+void DeviceStream::synchronize() {
+  // TODO: Wait for all cuda streams in mlx stream.
+  cudaStreamSynchronize(stream_);
 }
 
 cudaStream_t DeviceStream::schedule_cuda_stream() {
@@ -41,15 +44,11 @@ void DeviceStream::add_host_callback(std::function<void()> func) {
       new std::function<void()>(std::move(func))));
 }
 
-void CommandEncoder::prefetch_memory(const array& arr) {
-  // TODO: Profile whether prefetching the whole buffer would be faster.
-  const void* data = arr.data<void>();
-  size_t size = arr.data_size() * arr.itemsize();
-  if (data && size > 0) {
-    // TODO: Use a stream that maximizes parallelism.
-    CHECK_CUDA_ERROR(
-        cudaMemPrefetchAsync(data, size, device_, stream_.last_cuda_stream()));
+CommandEncoder& DeviceStream::get_encoder() {
+  if (!encoder_) {
+    encoder_ = std::make_unique<CommandEncoder>(*this);
   }
+  return *encoder_;
 }
 
 Device::Device(int device) {
@@ -62,7 +61,7 @@ Device::Device(int device) {
         device));
   }
   // The cublasLt handle is used for matmul.
-  set_cuda_device(device);
+  make_current();
   cublasLtCreate(&lt_);
 }
 
@@ -70,25 +69,49 @@ Device::~Device() {
   cublasLtDestroy(lt_);
 }
 
-Device& device(mlx::core::Device device) {
-  static std::vector<Device> devices;
-  for (int i = devices.size(); i <= device.index; ++i) {
-    devices.push_back(Device(i));
+void Device::make_current() {
+  // We need to set/get current CUDA device very frequently, cache it to reduce
+  // actual calls of CUDA APIs. This function assumes single-thread in host.
+  static int current_ = 0;
+  if (current_ != device_) {
+    CHECK_CUDA_ERROR(cudaSetDevice(device_));
+    current_ = device_;
   }
-  return devices[device.index];
 }
 
-DeviceStream& get_stream(Stream stream) {
-  return get_command_encoder(stream).stream();
+DeviceStream& Device::get_stream(Stream stream) {
+  auto it = streams_.find(stream.index);
+  if (it == streams_.end()) {
+    it = streams_.try_emplace(stream.index, *this, stream).first;
+  }
+  return it->second;
+}
+
+CommandEncoder::CommandEncoder(DeviceStream& stream)
+    : device_(stream.device()), stream_(stream) {}
+
+void CommandEncoder::prefetch_memory(const array& arr) {
+  // TODO: Profile whether prefetching the whole buffer would be faster.
+  const void* data = arr.data<void>();
+  size_t size = arr.data_size() * arr.itemsize();
+  if (data && size > 0) {
+    // TODO: Use a stream that maximizes parallelism.
+    CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
+        data, size, device_.cuda_device(), stream_.last_cuda_stream()));
+  }
+}
+
+Device& device(mlx::core::Device device) {
+  static std::unordered_map<int, Device> devices;
+  auto it = devices.find(device.index);
+  if (it == devices.end()) {
+    it = devices.try_emplace(device.index, device.index).first;
+  }
+  return it->second;
 }
 
 CommandEncoder& get_command_encoder(Stream stream) {
-  static std::unordered_map<int, CommandEncoder> encoder_map;
-  auto it = encoder_map.find(stream.index);
-  if (it == encoder_map.end()) {
-    it = encoder_map.emplace(stream.index, stream).first;
-  }
-  return it->second;
+  return device(stream.device).get_stream(stream).get_encoder();
 }
 
 } // namespace mxcuda

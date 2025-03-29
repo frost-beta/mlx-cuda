@@ -17,6 +17,7 @@ void stop_capture() {}
 
 void eval(array& arr) {
   auto s = arr.primitive().stream();
+  auto& d = mxcuda::device(s.device);
 
   auto outputs = arr.outputs();
   {
@@ -42,7 +43,7 @@ void eval(array& arr) {
   }
 
   scheduler::notify_new_task(s);
-  mxcuda::get_stream(s).add_host_callback([s, buffers = std::move(buffers)] {
+  d.get_stream(s).add_host_callback([s, buffers = std::move(buffers)] {
     scheduler::notify_task_completion(s);
   });
 }
@@ -52,8 +53,7 @@ void finalize(Stream) {
 }
 
 void synchronize(Stream stream) {
-  // TODO: Wait for all cuda streams in mlx stream.
-  cudaStreamSynchronize(mxcuda::get_stream(stream).last_cuda_stream());
+  mxcuda::device(stream.device).get_stream(stream).synchronize();
 }
 
 } // namespace mlx::core::metal
