@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/stream.h"
 
+#include <cublasLt.h>
 #include <thrust/execution_policy.h>
 
 namespace mlx::core::mxcuda {
@@ -105,6 +106,20 @@ class CommandEncoder {
   std::vector<array> temporaries_;
 };
 
+class Device {
+ public:
+  Device(int device);
+  ~Device();
+
+  cublasLtHandle_t lt_handle() const {
+    return lt_;
+  }
+
+ private:
+  cublasLtHandle_t lt_;
+};
+
+Device& device(mlx::core::Device device);
 DeviceStream& get_stream(Stream stream);
 CommandEncoder& get_command_encoder(Stream stream);
 

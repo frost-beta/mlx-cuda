@@ -4,6 +4,7 @@
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/metal/metal.h"
 
+#include <fmt/format.h>
 #include <unordered_map>
 
 namespace mlx::core {
@@ -14,14 +15,6 @@ DeviceStream::DeviceStream(Stream stream) {
   int device = stream.device.index;
   set_cuda_device(device);
   CHECK_CUDA_ERROR(cudaStreamCreate(&stream_));
-  // Validate the requirements of device.
-  // TODO: Validate per-device instead of per-stream.
-  int a = 0;
-  cudaDeviceGetAttribute(&a, cudaDevAttrConcurrentManagedAccess, device);
-  if (a != 1) {
-    throw std::runtime_error(
-        "Synchronization between CPU/GPU not supported for managed memory.");
-  }
 }
 
 DeviceStream::~DeviceStream() {
@@ -57,6 +50,32 @@ void CommandEncoder::prefetch_memory(const array& arr) {
     CHECK_CUDA_ERROR(
         cudaMemPrefetchAsync(data, size, device_, stream_.last_cuda_stream()));
   }
+}
+
+Device::Device(int device) {
+  // Validate the requirements of device.
+  int attr = 0;
+  cudaDeviceGetAttribute(&attr, cudaDevAttrConcurrentManagedAccess, device);
+  if (attr != 1) {
+    throw std::runtime_error(fmt::format(
+        "Device {} does not support synchronization in managed memory.",
+        device));
+  }
+  // The cublasLt handle is used for matmul.
+  set_cuda_device(device);
+  cublasLtCreate(&lt_);
+}
+
+Device::~Device() {
+  cublasLtDestroy(lt_);
+}
+
+Device& device(mlx::core::Device device) {
+  static std::vector<Device> devices;
+  for (int i = devices.size(); i <= device.index; ++i) {
+    devices.push_back(Device(i));
+  }
+  return devices[device.index];
 }
 
 DeviceStream& get_stream(Stream stream) {
