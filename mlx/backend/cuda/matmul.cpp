@@ -63,7 +63,7 @@ check_transpose(std::vector<array>& copies, const Stream& s, const array& arr) {
   }
 }
 
-#define MLX_CUBLAS_CHECK(cmd) check_cublas_error(#cmd, (cmd))
+#define CHECK_CUBLAS_ERROR(cmd) check_cublas_error(#cmd, (cmd))
 
 void check_cublas_error(const char* name, cublasStatus_t err) {
   if (err != CUBLAS_STATUS_SUCCESS) {
@@ -73,9 +73,13 @@ void check_cublas_error(const char* name, cublasStatus_t err) {
   }
 }
 
+// TODO: Set workspace size depending on architecture.
+uint64_t workspace_size = 4 * 1024 * 1024;
+
 class CudaMatMul {
  public:
   CudaMatMul(
+      mxcuda::CommandEncoder& encoder,
       Dtype ab_dtype,
       cublasOperation_t a_transposed,
       uint64_t a_rows,
@@ -89,31 +93,55 @@ class CudaMatMul {
       int64_t a_batch_stride,
       int64_t b_batch_stride) {
     auto data_type = dtype_to_cuda_type(ab_dtype);
-    MLX_CUBLAS_CHECK(cublasLtMatmulDescCreate(
+    CHECK_CUBLAS_ERROR(cublasLtMatmulDescCreate(
         &matmul_desc_, dtype_to_compute_type(ab_dtype), data_type));
     // TODO: Use device pointer mode.
     int32_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
-    MLX_CUBLAS_CHECK(cublasLtMatmulDescSetAttribute(
+    CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
         matmul_desc_,
         CUBLASLT_MATMUL_DESC_POINTER_MODE,
         &pointer_mode,
         sizeof(int32_t)));
-    MLX_CUBLAS_CHECK(cublasLtMatmulDescSetAttribute(
+    CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
         matmul_desc_,
         CUBLASLT_MATMUL_DESC_TRANSA,
         &a_transposed,
         sizeof(cublasOperation_t)));
-    MLX_CUBLAS_CHECK(cublasLtMatmulDescSetAttribute(
+    CHECK_CUBLAS_ERROR(cublasLtMatmulDescSetAttribute(
         matmul_desc_,
         CUBLASLT_MATMUL_DESC_TRANSB,
         &b_transposed,
         sizeof(cublasOperation_t)));
+
     a_desc_ = create_matrix_layout(
         data_type, a_rows, a_cols, lda, batch_count, a_batch_stride);
     b_desc_ = create_matrix_layout(
         data_type, b_rows, b_cols, ldb, batch_count, b_batch_stride);
     out_desc_ = create_matrix_layout(
-        data_type, a_rows, b_cols, a_rows, batch_count, a_rows * b_cols);
+        data_type, a_rows, b_cols, b_cols, batch_count, a_rows * b_cols);
+
+    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceCreate(&pref_));
+    CHECK_CUBLAS_ERROR(cublasLtMatmulPreferenceSetAttribute(
+        pref_,
+        CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+        &workspace_size,
+        sizeof(uint64_t)));
+
+    int ret = 0;
+    CHECK_CUBLAS_ERROR(cublasLtMatmulAlgoGetHeuristic(
+        encoder.device().lt_handle(),
+        matmul_desc_,
+        a_desc_,
+        b_desc_,
+        out_desc_,
+        out_desc_,
+        pref_,
+        1,
+        &heuristic_,
+        &ret));
+    if (ret == 0) {
+      throw std::runtime_error("Can not find algorithm for matmul.");
+    }
   }
 
   ~CudaMatMul() {
@@ -137,8 +165,9 @@ class CudaMatMul {
     // TODO: Allocate alpha/beta in temporary array.
     float alpha = 1;
     float beta = 0;
+    // TODO: Set heuristic algorithm.
     encoder.launch_kernel([&](cudaStream_t stream) {
-      MLX_CUBLAS_CHECK(cublasLtMatmul(
+      CHECK_CUBLAS_ERROR(cublasLtMatmul(
           encoder.device().lt_handle(),
           matmul_desc_,
           &alpha,
@@ -151,7 +180,7 @@ class CudaMatMul {
           out_desc_,
           out,
           out_desc_,
-          /* algo */ nullptr,
+          &heuristic_.algo,
           workspace.data<void>(),
           workspace.nbytes(),
           stream));
@@ -217,18 +246,18 @@ class CudaMatMul {
       int32_t batch_count,
       int64_t batch_stride) {
     cublasLtMatrixLayout_t desc;
-    MLX_CUBLAS_CHECK(
+    CHECK_CUBLAS_ERROR(
         cublasLtMatrixLayoutCreate(&desc, data_type, rows, cols, ld));
     cublasLtOrder_t order = CUBLASLT_ORDER_ROW;
-    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+    CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
         desc, CUBLASLT_MATRIX_LAYOUT_ORDER, &order, sizeof(cublasLtOrder_t)));
     if (batch_count > 1) {
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+      CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
           desc,
           CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
           &batch_count,
           sizeof(int32_t)));
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+      CHECK_CUBLAS_ERROR(cublasLtMatrixLayoutSetAttribute(
           desc,
           CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
           &batch_stride,
@@ -238,10 +267,10 @@ class CudaMatMul {
   }
 
   cublasLtMatmulDesc_t matmul_desc_{nullptr};
+  cublasLtMatmulPreference_t pref_{nullptr};
   cublasLtMatrixLayout_t a_desc_{nullptr};
   cublasLtMatrixLayout_t b_desc_{nullptr};
   cublasLtMatrixLayout_t out_desc_{nullptr};
-  // TODO: Get heuristic.
   cublasLtMatmulHeuristicResult_t heuristic_;
 };
 
@@ -281,6 +310,10 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [a_transposed, lda, a] = check_transpose(copies, s, a_pre);
   auto [b_transposed, ldb, b] = check_transpose(copies, s, b_pre);
 
+  for (auto& temp : copies) {
+    encoder.add_temporary(temp);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
 
@@ -309,16 +342,14 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         "Non-contiguous batch gemm is not implemented in CUDA backend.");
   }
 
-  // TODO: Set workspace size depending on architecture.
-  int workspace_size = 4 * 1024 * 1024;
-  array workspace(allocator::malloc(workspace_size), {workspace_size}, uint8);
-
-  for (auto& temp : copies) {
-    encoder.add_temporary(temp);
-  }
+  array workspace(
+      allocator::malloc(workspace_size),
+      {static_cast<int>(workspace_size)},
+      uint8);
   encoder.add_temporary(workspace);
 
   CudaMatMul matmul(
+      encoder,
       a.dtype(),
       a_transposed ? CUBLAS_OP_T : CUBLAS_OP_N,
       M,
