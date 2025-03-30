@@ -85,18 +85,20 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Fill out with init value.
   if (in.size() == 0) {
     encoder.launch_thrust([&](auto policy) {
-      MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE, [&]() {
-        MLX_SWITCH_REDUCE_TYPES(reduce_type_, CTYPE, OP, {
+      MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
+        using InType = cuda_type_t<CTYPE>;
+        MLX_SWITCH_REDUCE_TYPES(reduce_type_, InType, OP, {
           if constexpr (is_supported_reduce_op(OP{})) {
+            using OutType = std::remove_const_t<decltype(OP::init)>;
             thrust::copy_n(
                 policy,
                 thrust::make_constant_iterator(OP::init),
                 out.data_size(),
-                thrust::device_pointer_cast(out.data<CTYPE>()));
+                thrust::device_pointer_cast(out.data<OutType>()));
           } else {
             throw std::runtime_error(fmt::format(
                 "Can not do reduce init op on dtype {}.",
-                dtype_to_string(out.dtype())));
+                dtype_to_string(in.dtype())));
           }
         });
       });
@@ -118,15 +120,16 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_CUDA_TYPES(out.dtype(), CTYPE, [&]() {
-      MLX_SWITCH_REDUCE_TYPES(reduce_type_, CTYPE, OP, {
+    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
+      using InType = cuda_type_t<CTYPE>;
+      MLX_SWITCH_REDUCE_TYPES(reduce_type_, InType, OP, {
         if constexpr (is_supported_reduce_op(OP{})) {
+          using OutType = std::remove_const_t<decltype(OP::init)>;
           if (plan.type == ContiguousAllReduce) {
             all_reduce(
                 encoder,
-                thrust::device_pointer_cast(in.data<CTYPE>()),
-                thrust::device_pointer_cast(
-                    out.data<std::remove_const_t<decltype(OP::init)>>()),
+                thrust::device_pointer_cast(in.data<InType>()),
+                thrust::device_pointer_cast(out.data<OutType>()),
                 in.data_size(),
                 OP(),
                 OP::init,
@@ -142,8 +145,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           }
         } else {
           throw std::runtime_error(fmt::format(
-              "Can not do reduce init op on dtype {}.",
-              dtype_to_string(out.dtype())));
+              "Can not do reduce op on dtype {}.",
+              dtype_to_string(in.dtype())));
         }
       });
     });
