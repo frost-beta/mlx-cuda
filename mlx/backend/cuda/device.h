@@ -119,6 +119,14 @@ class CommandEncoder {
     });
   }
 
+  Device& device() {
+    return device_;
+  }
+
+  DeviceStream& stream() {
+    return stream_;
+  }
+
  private:
   template <typename F>
   void launch_kernel_with(F&& fun, cudaStream_t stream) {

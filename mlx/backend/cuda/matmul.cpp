@@ -88,10 +88,9 @@ class CudaMatMul {
       int32_t batch_count,
       int64_t a_batch_stride,
       int64_t b_batch_stride) {
-    // TODO: Set workspace size.
-    auto cuda_type = dtype_to_cuda_type(ab_dtype);
+    auto data_type = dtype_to_cuda_type(ab_dtype);
     MLX_CUBLAS_CHECK(cublasLtMatmulDescCreate(
-        &matmul_desc_, dtype_to_compute_type(ab_dtype), cuda_type));
+        &matmul_desc_, dtype_to_compute_type(ab_dtype), data_type));
     // TODO: Use device pointer mode.
     int32_t pointer_mode = CUBLASLT_POINTER_MODE_HOST;
     MLX_CUBLAS_CHECK(cublasLtMatmulDescSetAttribute(
@@ -109,61 +108,12 @@ class CudaMatMul {
         CUBLASLT_MATMUL_DESC_TRANSB,
         &b_transposed,
         sizeof(cublasOperation_t)));
-    MLX_CUBLAS_CHECK(
-        cublasLtMatrixLayoutCreate(&a_desc_, cuda_type, a_rows, a_cols, lda));
-    MLX_CUBLAS_CHECK(
-        cublasLtMatrixLayoutCreate(&b_desc_, cuda_type, b_rows, b_cols, ldb));
-    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutCreate(
-        &out_desc_, cuda_type, a_rows, b_cols, a_rows));
-    cublasLtOrder_t row_order = CUBLASLT_ORDER_ROW;
-    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-        a_desc_,
-        CUBLASLT_MATRIX_LAYOUT_ORDER,
-        &row_order,
-        sizeof(cublasLtOrder_t)));
-    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-        b_desc_,
-        CUBLASLT_MATRIX_LAYOUT_ORDER,
-        &row_order,
-        sizeof(cublasLtOrder_t)));
-    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-        out_desc_,
-        CUBLASLT_MATRIX_LAYOUT_ORDER,
-        &row_order,
-        sizeof(cublasLtOrder_t)));
-    if (batch_count > 1) {
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          a_desc_,
-          CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-          &batch_count,
-          sizeof(int32_t)));
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          b_desc_,
-          CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-          &batch_count,
-          sizeof(int32_t)));
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          out_desc_,
-          CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
-          &batch_count,
-          sizeof(int32_t)));
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          a_desc_,
-          CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
-          &a_batch_stride,
-          sizeof(int64_t)));
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          b_desc_,
-          CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
-          &b_batch_stride,
-          sizeof(int64_t)));
-      int64_t out_batch_stride = a_rows * b_cols;
-      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
-          out_desc_,
-          CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
-          &out_batch_stride,
-          sizeof(int64_t)));
-    }
+    a_desc_ = create_matrix_layout(
+        data_type, a_rows, a_cols, lda, batch_count, a_batch_stride);
+    b_desc_ = create_matrix_layout(
+        data_type, b_rows, b_cols, ldb, batch_count, b_batch_stride);
+    out_desc_ = create_matrix_layout(
+        data_type, a_rows, b_cols, a_rows, batch_count, a_rows * b_cols);
   }
 
   ~CudaMatMul() {
@@ -182,13 +132,14 @@ class CudaMatMul {
   }
 
   template <typename T>
-  void Run(mxcuda::DeviceStream& s, T* out, T* a, T* b) {
+  void
+  Run(mxcuda::CommandEncoder& encoder, array& workspace, T* out, T* a, T* b) {
     // TODO: Allocate alpha/beta in temporary array.
     float alpha = 1;
     float beta = 0;
-    s.get_encoder().launch_kernel([&](cudaStream_t stream) {
+    encoder.launch_kernel([&](cudaStream_t stream) {
       MLX_CUBLAS_CHECK(cublasLtMatmul(
-          s.device().lt_handle(),
+          encoder.device().lt_handle(),
           matmul_desc_,
           &alpha,
           a,
@@ -201,8 +152,8 @@ class CudaMatMul {
           out,
           out_desc_,
           /* algo */ nullptr,
-          /* workspace */ nullptr,
-          /* workspaceSize */ 0,
+          workspace.data<void>(),
+          workspace.nbytes(),
           stream));
     });
   }
@@ -256,6 +207,34 @@ class CudaMatMul {
         throw std::runtime_error(fmt::format(
             "Unsupported dtype in CudaMatMul: {}", dtype_to_string(dtype)));
     }
+  }
+
+  cublasLtMatrixLayout_t create_matrix_layout(
+      cudaDataType_t data_type,
+      uint64_t rows,
+      uint64_t cols,
+      int64_t ld,
+      int32_t batch_count,
+      int64_t batch_stride) {
+    cublasLtMatrixLayout_t desc;
+    MLX_CUBLAS_CHECK(
+        cublasLtMatrixLayoutCreate(&desc, data_type, rows, cols, ld));
+    cublasLtOrder_t order = CUBLASLT_ORDER_ROW;
+    MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+        desc, CUBLASLT_MATRIX_LAYOUT_ORDER, &order, sizeof(cublasLtOrder_t)));
+    if (batch_count > 1) {
+      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+          desc,
+          CUBLASLT_MATRIX_LAYOUT_BATCH_COUNT,
+          &batch_count,
+          sizeof(int32_t)));
+      MLX_CUBLAS_CHECK(cublasLtMatrixLayoutSetAttribute(
+          desc,
+          CUBLASLT_MATRIX_LAYOUT_STRIDED_BATCH_OFFSET,
+          &batch_stride,
+          sizeof(int64_t)));
+    }
+    return desc;
   }
 
   cublasLtMatmulDesc_t matmul_desc_{nullptr};
@@ -330,6 +309,15 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         "Non-contiguous batch gemm is not implemented in CUDA backend.");
   }
 
+  // TODO: Set workspace size depending on architecture.
+  int workspace_size = 4 * 1024 * 1024;
+  array workspace(allocator::malloc(workspace_size), {workspace_size}, uint8);
+
+  for (auto& temp : copies) {
+    encoder.add_temporary(temp);
+  }
+  encoder.add_temporary(workspace);
+
   CudaMatMul matmul(
       a.dtype(),
       a_transposed ? CUBLAS_OP_T : CUBLAS_OP_N,
@@ -345,8 +333,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       b_batch_strides[0]);
   MLX_SWITCH_FLOAT_TYPES_CHECKED(a.dtype(), "matmul", CTYPE, [&]() {
     using ABType = cuda_type_t<CTYPE>;
-    matmul.Run<ABType>(
-        mxcuda::get_stream(s),
+    matmul.Run(
+        encoder,
+        workspace,
         out.data<ABType>(),
         a.data<ABType>(),
         b.data<ABType>());
