@@ -51,16 +51,17 @@ CommandEncoder& DeviceStream::get_encoder() {
   return *encoder_;
 }
 
-Device::Device(int device) {
+Device::Device(int device) : device_(device) {
   // Validate the requirements of device.
   int attr = 0;
-  cudaDeviceGetAttribute(&attr, cudaDevAttrConcurrentManagedAccess, device);
+  cudaDeviceGetAttribute(&attr, cudaDevAttrConcurrentManagedAccess, device_);
   if (attr != 1) {
     throw std::runtime_error(fmt::format(
         "Device {} does not support synchronization in managed memory.",
-        device));
+        device_));
   }
   // The cublasLt handle is used for matmul.
+  // TODO: Allocate a workspace buffer for cublas.
   make_current();
   cublasLtCreate(&lt_);
 }
@@ -72,10 +73,10 @@ Device::~Device() {
 void Device::make_current() {
   // We need to set/get current CUDA device very frequently, cache it to reduce
   // actual calls of CUDA APIs. This function assumes single-thread in host.
-  static int current_ = 0;
-  if (current_ != device_) {
+  static int current = 0;
+  if (current != device_) {
     CHECK_CUDA_ERROR(cudaSetDevice(device_));
-    current_ = device_;
+    current = device_;
   }
 }
 
@@ -110,8 +111,12 @@ Device& device(mlx::core::Device device) {
   return it->second;
 }
 
+DeviceStream& get_stream(Stream stream) {
+  return device(stream.device).get_stream(stream);
+}
+
 CommandEncoder& get_command_encoder(Stream stream) {
-  return device(stream.device).get_stream(stream).get_encoder();
+  return get_stream(stream).get_encoder();
 }
 
 } // namespace mxcuda

@@ -138,6 +138,7 @@ class CommandEncoder {
 };
 
 Device& device(mlx::core::Device device);
+DeviceStream& get_stream(Stream stream);
 CommandEncoder& get_command_encoder(Stream stream);
 
 } // namespace mlx::core::mxcuda

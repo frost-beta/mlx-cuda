@@ -11,6 +11,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/event.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
