@@ -36,15 +36,30 @@ namespace {
     MLX_FORALL_REDUCE_TYPES(MLX_SWITCH_CASE_REDUCE_TYPE, OP, __VA_ARGS__) \
   }
 
+template <typename Op>
+constexpr const char* get_reduce_op_name() {
+#define SPECIALIZE_reduce_name(TYPE, ...) \
+  if constexpr (std::is_same_v<Op, mxcuda::TYPE>) \
+    return #TYPE;
+  MLX_FORALL_REDUCE_TYPES(SPECIALIZE_reduce_name, Op)
+#undef SPECIALIZE_reduce_name
+  return "(unknown reduce op)";
+}
+
+template <typename T, typename U>
+struct CastOp {
+  __device__ U operator()(T x) {
+    return static_cast<U>(x);
+  }
+};
+
 template <typename Op, typename T>
 constexpr bool is_supported_reduce_op() {
   if (std::is_same_v<Op, mxcuda::And> || std::is_same_v<Op, mxcuda::Or>) {
-    return std::is_same_v<T, bool>;
+    return std::is_integral_v<T>;
   }
-  if (std::is_same_v<Op, mxcuda::Sum> || std::is_same_v<Op, mxcuda::Prod>) {
-    return !std::is_same_v<T, bool>;
-  }
-  if (std::is_same_v<Op, mxcuda::Min> || std::is_same_v<Op, mxcuda::Max>) {
+  if (std::is_same_v<Op, mxcuda::Min> || std::is_same_v<Op, mxcuda::Max> ||
+      std::is_same_v<Op, mxcuda::Sum> || std::is_same_v<Op, mxcuda::Prod>) {
     return true;
   }
   return false;
@@ -125,7 +140,9 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           if (plan.type == ContiguousAllReduce) {
             all_reduce(
                 encoder,
-                thrust::device_pointer_cast(in.data<InType>()),
+                thrust::make_transform_iterator(
+                    thrust::device_pointer_cast(in.data<InType>()),
+                    CastOp<InType, OutType>()),
                 thrust::device_pointer_cast(out.data<OutType>()),
                 in.data_size(),
                 OP(),
@@ -134,15 +151,18 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           } else if (
               plan.type == ContiguousReduce ||
               plan.type == GeneralContiguousReduce) {
-            throw std::runtime_error("Reduce not implemented in CUDA backend.");
+            throw std::runtime_error(
+                "Multi-axis reduce not implemented in CUDA backend.");
           } else if (
               plan.type == ContiguousStridedReduce ||
               plan.type == GeneralStridedReduce) {
-            throw std::runtime_error("Reduce not implemented in CUDA backend.");
+            throw std::runtime_error(
+                "General reduce not implemented in CUDA backend.");
           }
         } else {
           throw std::runtime_error(fmt::format(
-              "Can not do reduce op on dtype {}.",
+              "Can not do reduce op {} on dtype {}.",
+              get_reduce_op_name<OP>(),
               dtype_to_string(in.dtype())));
         }
       });
