@@ -24,31 +24,27 @@ namespace {
   _(Max, __VA_ARGS__)                   \
   _(Min, __VA_ARGS__)
 
-#define MLX_SWITCH_CASE_REDUCE_TYPE(TYPE, CTYPE, OP, ...) \
-  case Reduce::TYPE: {                                    \
-    using OP = mxcuda::TYPE<CTYPE>;                       \
-    __VA_ARGS__;                                          \
-    break;                                                \
+#define MLX_SWITCH_CASE_REDUCE_TYPE(TYPE, OP, ...) \
+  case Reduce::TYPE: {                             \
+    using OP = mxcuda::TYPE;                       \
+    __VA_ARGS__;                                   \
+    break;                                         \
   }
 
-#define MLX_SWITCH_REDUCE_TYPES(TYPE, CTYPE, OP, ...)        \
-  switch (TYPE) {                                            \
-    MLX_FORALL_REDUCE_TYPES(                                 \
-        MLX_SWITCH_CASE_REDUCE_TYPE, CTYPE, OP, __VA_ARGS__) \
+#define MLX_SWITCH_REDUCE_TYPES(TYPE, OP, ...)                            \
+  switch (TYPE) {                                                         \
+    MLX_FORALL_REDUCE_TYPES(MLX_SWITCH_CASE_REDUCE_TYPE, OP, __VA_ARGS__) \
   }
 
-template <template <typename> class Op, typename T>
-constexpr bool is_supported_reduce_op(Op<T>) {
-  if (std::is_same_v<Op<T>, mxcuda::And<T>> ||
-      std::is_same_v<Op<T>, mxcuda::Or<T>>) {
+template <typename Op, typename T>
+constexpr bool is_supported_reduce_op() {
+  if (std::is_same_v<Op, mxcuda::And> || std::is_same_v<Op, mxcuda::Or>) {
     return std::is_same_v<T, bool>;
   }
-  if (std::is_same_v<Op<T>, mxcuda::Sum<T>> ||
-      std::is_same_v<Op<T>, mxcuda::Prod<T>>) {
+  if (std::is_same_v<Op, mxcuda::Sum> || std::is_same_v<Op, mxcuda::Prod>) {
     return !std::is_same_v<T, bool>;
   }
-  if (std::is_same_v<Op<T>, mxcuda::Min<T>> ||
-      std::is_same_v<Op<T>, mxcuda::Max<T>>) {
+  if (std::is_same_v<Op, mxcuda::Min> || std::is_same_v<Op, mxcuda::Max>) {
     return true;
   }
   return false;
@@ -86,13 +82,14 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (in.size() == 0) {
     encoder.launch_thrust([&](auto policy) {
       MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
-        using InType = cuda_type_t<CTYPE>;
-        MLX_SWITCH_REDUCE_TYPES(reduce_type_, InType, OP, {
-          if constexpr (is_supported_reduce_op(OP{})) {
-            using OutType = std::remove_const_t<decltype(OP::init)>;
+        MLX_SWITCH_REDUCE_TYPES(reduce_type_, OP, {
+          if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
+            using InType = cuda_type_t<CTYPE>;
+            using OutType = mxcuda::ReduceInit<OP, InType>::type;
             thrust::copy_n(
                 policy,
-                thrust::make_constant_iterator(OP::init),
+                thrust::make_constant_iterator(
+                    mxcuda::ReduceInit<OP, InType>::value),
                 out.data_size(),
                 thrust::device_pointer_cast(out.data<OutType>()));
           } else {
@@ -121,10 +118,10 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
-      using InType = cuda_type_t<CTYPE>;
-      MLX_SWITCH_REDUCE_TYPES(reduce_type_, InType, OP, {
-        if constexpr (is_supported_reduce_op(OP{})) {
-          using OutType = std::remove_const_t<decltype(OP::init)>;
+      MLX_SWITCH_REDUCE_TYPES(reduce_type_, OP, {
+        if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
+          using InType = cuda_type_t<CTYPE>;
+          using OutType = mxcuda::ReduceInit<OP, InType>::type;
           if (plan.type == ContiguousAllReduce) {
             all_reduce(
                 encoder,
@@ -132,7 +129,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
                 thrust::device_pointer_cast(out.data<OutType>()),
                 in.data_size(),
                 OP(),
-                OP::init,
+                mxcuda::ReduceInit<OP, InType>::value,
                 stream);
           } else if (
               plan.type == ContiguousReduce ||
