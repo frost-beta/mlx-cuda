@@ -46,24 +46,21 @@ constexpr const char* get_reduce_op_name() {
   return "(unknown reduce op)";
 }
 
+template <typename Op, typename T>
+constexpr bool is_supported_reduce_op() {
+  if (std::is_same_v<Op, mxcuda::And> || std::is_same_v<Op, mxcuda::Or>) {
+    // TODO: Make and/or work for complex number.
+    return !std::is_same_v<T, complex64_t>;
+  }
+  return true;
+}
+
 template <typename T, typename U>
 struct CastOp {
   __device__ U operator()(T x) {
     return static_cast<U>(x);
   }
 };
-
-template <typename Op, typename T>
-constexpr bool is_supported_reduce_op() {
-  if (std::is_same_v<Op, mxcuda::And> || std::is_same_v<Op, mxcuda::Or>) {
-    return !std::is_same_v<T, complex64_t>;
-  }
-  if (std::is_same_v<Op, mxcuda::Min> || std::is_same_v<Op, mxcuda::Max> ||
-      std::is_same_v<Op, mxcuda::Sum> || std::is_same_v<Op, mxcuda::Prod>) {
-    return true;
-  }
-  return false;
-}
 
 template <typename... Args>
 void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
@@ -100,7 +97,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
         MLX_SWITCH_REDUCE_TYPES(reduce_type_, OP, {
           if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
             using InType = cuda_type_t<CTYPE>;
-            using OutType = mxcuda::ReduceInit<OP, InType>::type;
+            using OutType = mxcuda::ReduceResult<OP, InType>::type;
             thrust::copy_n(
                 policy,
                 thrust::make_constant_iterator(
@@ -136,7 +133,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       MLX_SWITCH_REDUCE_TYPES(reduce_type_, OP, {
         if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
           using InType = cuda_type_t<CTYPE>;
-          using OutType = mxcuda::ReduceInit<OP, InType>::type;
+          using OutType = mxcuda::ReduceResult<OP, InType>::type;
           if (plan.type == ContiguousAllReduce) {
             all_reduce(
                 encoder,
