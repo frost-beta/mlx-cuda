@@ -2,11 +2,7 @@
 
 #include "mlx/backend/cuda/kernels/utils.cuh"
 
-#include <cooperative_groups.h>
-
 namespace mlx::core::mxcuda {
-
-namespace cg = cooperative_groups;
 
 __constant__ constexpr uint32_t rotations[2][4] = {
     {13, 15, 26, 6},
@@ -14,7 +10,7 @@ __constant__ constexpr uint32_t rotations[2][4] = {
 
 union rbits {
   uint2 val;
-  uint8_t bytes[4][2];
+  uint8_t bytes[2][4];
 };
 
 __device__ rbits threefry2x32_hash(uint2 key, uint2 count) {
@@ -40,11 +36,15 @@ __device__ rbits threefry2x32_hash(uint2 key, uint2 count) {
 __global__ void rbitsc(
     const uint32_t* keys,
     uint8_t* out,
+    const __grid_constant__ dim3 grid_dim,
     const __grid_constant__ bool odd,
-    const __grid_constant__ uint bytes_per_key) {
-  auto block = cg::this_thread_block();
-  auto index = block.thread_index();
-  auto grid_dim = block.dim_threads();
+    const __grid_constant__ uint32_t bytes_per_key) {
+  uint2 index{
+      blockIdx.x * blockDim.x + threadIdx.x,
+      blockIdx.y * blockDim.y + threadIdx.y};
+  if (index.x >= grid_dim.x || index.y >= grid_dim.y) {
+    return;
+  }
 
   auto kidx = 2 * index.x;
   auto key = uint2{keys[kidx], keys[kidx + 1]};
@@ -75,14 +75,18 @@ __global__ void rbitsc(
 __global__ void rbits(
     const uint32_t* keys,
     uint8_t* out,
+    const __grid_constant__ dim3 grid_dim,
     const __grid_constant__ bool odd,
-    const __grid_constant__ uint bytes_per_key,
-    const __grid_constant__ int ndim,
+    const __grid_constant__ uint32_t bytes_per_key,
+    const __grid_constant__ int32_t ndim,
     const __grid_constant__ Shape key_shape,
     const __grid_constant__ Strides key_strides) {
-  auto block = cg::this_thread_block();
-  auto index = block.thread_index();
-  auto grid_dim = block.dim_threads();
+  uint2 index{
+      blockIdx.x * blockDim.x + threadIdx.x,
+      blockIdx.y * blockDim.y + threadIdx.y};
+  if (index.x >= grid_dim.x || index.y >= grid_dim.y) {
+    return;
+  }
 
   auto kidx = 2 * index.x;
   auto k1_elem = elem_to_loc(kidx, key_shape.data(), key_strides.data(), ndim);

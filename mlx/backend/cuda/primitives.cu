@@ -161,11 +161,16 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
     dim3 num_blocks = ceil_div(total_threads, block_dim);
     if (keys.flags().row_contiguous) {
       mxcuda::rbitsc<<<num_blocks, block_dim, 0, stream>>>(
-          keys.data<uint32_t>(), out.data<uint8_t>(), odd, bytes_per_key);
+          keys.data<uint32_t>(),
+          out.data<uint8_t>(),
+          total_threads,
+          odd,
+          bytes_per_key);
     } else {
       mxcuda::rbits<<<num_blocks, block_dim, 0, stream>>>(
           keys.data<uint32_t>(),
           out.data<uint8_t>(),
+          total_threads,
           odd,
           bytes_per_key,
           keys.ndim(),

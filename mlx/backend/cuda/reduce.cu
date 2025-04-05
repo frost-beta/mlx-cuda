@@ -38,7 +38,7 @@ namespace {
 
 template <typename Op>
 constexpr const char* get_reduce_op_name() {
-#define SPECIALIZE_reduce_name(TYPE, ...) \
+#define SPECIALIZE_reduce_name(TYPE, ...)         \
   if constexpr (std::is_same_v<Op, mxcuda::TYPE>) \
     return #TYPE;
   MLX_FORALL_REDUCE_TYPES(SPECIALIZE_reduce_name, Op)
@@ -56,7 +56,7 @@ struct CastOp {
 template <typename Op, typename T>
 constexpr bool is_supported_reduce_op() {
   if (std::is_same_v<Op, mxcuda::And> || std::is_same_v<Op, mxcuda::Or>) {
-    return std::is_integral_v<T>;
+    return !std::is_same_v<T, complex64_t>;
   }
   if (std::is_same_v<Op, mxcuda::Min> || std::is_same_v<Op, mxcuda::Max> ||
       std::is_same_v<Op, mxcuda::Sum> || std::is_same_v<Op, mxcuda::Prod>) {
