@@ -16,7 +16,9 @@ DeviceStream::DeviceStream(Device& device, Stream stream) : device_(device) {
 }
 
 DeviceStream::~DeviceStream() {
-  CHECK_CUDA_ERROR(cudaStreamDestroy(stream_));
+  // The cuda stream is leaked on exit: it is unknown when cuda runtime shuts
+  // down, and it could happen before we clean up streams and would crash.
+  // CHECK_CUDA_ERROR(cudaStreamDestroy(stream_));
 }
 
 void DeviceStream::synchronize() {
