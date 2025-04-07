@@ -10,6 +10,7 @@
 
 #include <cublasLt.h>
 #include <fmt/format.h>
+#include <nvtx3/nvtx3.hpp>
 
 #include <numeric>
 #include <sstream>
@@ -277,6 +278,7 @@ class CudaMatMul {
 } // namespace
 
 void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Matmul::eval_gpu");
   assert(inputs.size() == 2);
   if (!issubdtype(out.dtype(), floating)) {
     throw std::runtime_error(

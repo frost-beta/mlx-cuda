@@ -7,6 +7,7 @@
 #include "mlx/primitives.h"
 
 #include <assert.h>
+#include <nvtx3/nvtx3.hpp>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -76,6 +77,7 @@ void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
 } // namespace
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Reduce::eval_gpu");
   assert(inputs.size() == 1);
   array in = inputs[0];
 

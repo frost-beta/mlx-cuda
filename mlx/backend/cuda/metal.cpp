@@ -6,6 +6,8 @@
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
+#include <nvtx3/nvtx3.hpp>
+
 namespace mlx::core::metal {
 
 bool is_available() {
@@ -16,6 +18,7 @@ void start_capture(std::string) {}
 void stop_capture() {}
 
 void eval(array& arr) {
+  nvtx3::scoped_range r("metal::eval");
   auto s = arr.primitive().stream();
   auto& d = mxcuda::device(s.device);
 
@@ -53,6 +56,7 @@ void finalize(Stream) {
 }
 
 void synchronize(Stream stream) {
+  nvtx3::scoped_range r("synchronize");
   mxcuda::device(stream.device).get_stream(stream).synchronize();
 }
 

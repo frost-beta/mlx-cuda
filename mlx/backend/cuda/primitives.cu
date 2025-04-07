@@ -12,6 +12,7 @@
 #include "mlx/primitives.h"
 
 #include <assert.h>
+#include <nvtx3/nvtx3.hpp>
 #include <thrust/device_ptr.h>
 #include <thrust/transform.h>
 
@@ -52,6 +53,7 @@ void reshape(const array& in, array& out, Stream s) {
 } // namespace
 
 void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Arange::eval_gpu");
   assert(inputs.size() == 0);
   out.set_data(allocator::malloc(out.nbytes()));
   if (out.size() == 0) {
@@ -77,6 +79,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("ArgReduce::eval_gpu");
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   out.set_data(allocator::malloc(out.nbytes()));
@@ -131,6 +134,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("RandomBits::eval_gpu");
   assert(inputs.size() == 1);
 
   // keys has shape (N1, ..., NK, 2)
@@ -182,24 +186,29 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 // TODO: Code below are identical to backend/metal/primitives.cpp
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("AsStrided::eval_gpu");
   eval(inputs, out);
 }
 
 void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("AsType::eval_gpu");
   CopyType ctype =
       inputs[0].flags().contiguous ? CopyType::Vector : CopyType::General;
   copy_gpu(inputs[0], out, ctype);
 }
 
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Broadcast::eval_gpu");
   eval(inputs, out);
 }
 
 void BroadcastAxes::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("BroadcastAxes::eval_gpu");
   eval(inputs, out);
 }
 
 void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Contiguous::eval_gpu");
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   constexpr size_t extra_bytes = 16384;
@@ -213,26 +222,31 @@ void Contiguous::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Copy::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Copy::eval_gpu");
   eval(inputs, out);
 }
 
 void CustomTransforms::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  nvtx3::scoped_range r("CustomTransforms::eval_gpu");
   eval(inputs, outputs);
 }
 
 void Depends::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  nvtx3::scoped_range r("Depends::eval_gpu");
   eval(inputs, outputs);
 }
 
 void ExpandDims::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("ExpandDims::eval_gpu");
   eval(inputs, out);
 }
 
 void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Full::eval_gpu");
   auto in = inputs[0];
   CopyType ctype;
   if (in.data_size() == 1) {
@@ -246,24 +260,29 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Flatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Flatten::eval_gpu");
   reshape(inputs[0], out, stream());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("NumberOfElements::eval_gpu");
   eval(inputs, out);
 }
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Reshape::eval_gpu");
   reshape(inputs[0], out, stream());
 }
 
 void Split::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
+  nvtx3::scoped_range r("Split::eval_gpu");
   eval(inputs, outputs);
 }
 
 void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Slice::eval_gpu");
   assert(inputs.size() == 1);
   if (out.size() == 0) {
     out.set_data(nullptr);
@@ -275,22 +294,27 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Squeeze::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Squeeze::eval_gpu");
   eval(inputs, out);
 }
 
 void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("StopGradient::eval_gpu");
   eval(inputs, out);
 }
 
 void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Transpose::eval_gpu");
   eval(inputs, out);
 }
 
 void Unflatten::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("Unflatten::eval_gpu");
   reshape(inputs[0], out, stream());
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("View::eval_gpu");
   auto& in = inputs[0];
   auto ibytes = size_of(in.dtype());
   auto obytes = size_of(out.dtype());

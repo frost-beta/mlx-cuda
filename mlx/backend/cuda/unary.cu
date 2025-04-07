@@ -6,6 +6,7 @@
 #include "mlx/backend/cuda/kernels/unary_ops.cuh"
 #include "mlx/primitives.h"
 
+#include <nvtx3/nvtx3.hpp>
 #include <thrust/device_ptr.h>
 #include <thrust/transform.h>
 
@@ -135,6 +136,7 @@ void unary_op_gpu(
 
 #define UNARY_GPU(func)                                                     \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) {       \
+    nvtx3::scoped_range r(#func "::eval_gpu");                              \
     auto& s = out.primitive().stream();                                     \
     unary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
   }

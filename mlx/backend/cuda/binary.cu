@@ -8,6 +8,7 @@
 #include "mlx/backend/cuda/kernels/iterators/repeat_iterator.cuh"
 #include "mlx/primitives.h"
 
+#include <nvtx3/nvtx3.hpp>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/transform.h>
@@ -168,6 +169,7 @@ void binary_op_gpu(
 
 #define BINARY_GPU(func)                                                     \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) {        \
+    nvtx3::scoped_range r(#func "::eval_gpu");                               \
     auto& s = out.primitive().stream();                                      \
     binary_op_gpu<mxcuda::func>(inputs, out, get_primitive_string(this), s); \
   }
@@ -175,6 +177,7 @@ void binary_op_gpu(
 #define BINARY_GPU_MULTI(func)                                         \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    nvtx3::scoped_range r(#func "::eval_gpu");                         \
     auto& s = outputs[0].primitive().stream();                         \
     binary_op_gpu<mxcuda::func>(                                       \
         inputs, outputs, get_primitive_string(this), s);               \
@@ -200,6 +203,7 @@ BINARY_GPU(Power)
 BINARY_GPU(Subtract)
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("BitwiseBinary::eval_gpu");
   auto& s = out.primitive().stream();
   auto op = get_primitive_string(this);
   switch (op_) {

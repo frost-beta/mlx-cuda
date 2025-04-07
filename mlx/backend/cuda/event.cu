@@ -5,6 +5,7 @@
 #include "mlx/event.h"
 #include "mlx/scheduler.h"
 
+#include <nvtx3/nvtx3.hpp>
 #include <cuda/atomic>
 
 namespace mlx::core {
@@ -53,16 +54,19 @@ Event::Event(Stream stream) : stream_(stream) {
 }
 
 void Event::wait() {
+  nvtx3::scoped_range r("Event::wait");
   auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
   event_wait(ac, value());
 }
 
 void Event::signal() {
+  nvtx3::scoped_range r("Event::signal");
   auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
   event_signal(ac, value());
 }
 
 void Event::wait(Stream stream) {
+  nvtx3::scoped_range r("Event::wait(stream)");
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [this]() mutable { wait(); });
   } else {
@@ -75,6 +79,7 @@ void Event::wait(Stream stream) {
 }
 
 void Event::signal(Stream stream) {
+  nvtx3::scoped_range r("Event::signal(stream)");
   if (stream.device == Device::cpu) {
     scheduler::enqueue(stream, [this]() mutable { signal(); });
   } else {
@@ -87,6 +92,7 @@ void Event::signal(Stream stream) {
 }
 
 bool Event::is_signaled() const {
+  nvtx3::scoped_range r("Event::is_signaled");
   auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
   return ac->load() >= value();
 }

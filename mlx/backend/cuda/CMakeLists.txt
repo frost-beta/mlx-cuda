@@ -41,11 +41,21 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(cccl)
 target_include_directories(mlx PRIVATE BEFORE "${cccl_SOURCE_DIR}/include")
 
+# Use fixed version of NVTX.
+FetchContent_Declare(
+  nvtx3
+  GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
+  GIT_TAG v3.1.1
+  GIT_SHALLOW TRUE
+  SOURCE_SUBDIR c EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(nvtx3)
+target_link_libraries(mlx PUBLIC $<BUILD_INTERFACE:nvtx3-cpp>)
+
 # Make CUDA APIs visible in .cpp files.
 find_package(CUDAToolkit REQUIRED)
 target_include_directories(mlx PRIVATE ${CUDAToolkit_INCLUDE_DIRS})
 
-# We are using cublasLt.
+# Use cublasLt.
 target_link_libraries(mlx PRIVATE CUDA::cublasLt_static)
 
 # Suppress nvcc warnings on MLX headers.
