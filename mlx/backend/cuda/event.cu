@@ -44,7 +44,7 @@ Event::Event(Stream stream) : stream_(stream) {
   // Allocate cuda::atomic on managed memory.
   cuda::atomic<uint64_t>* ac;
   CHECK_CUDA_ERROR(cudaMallocManaged(&ac, sizeof(cuda::atomic<uint64_t>)));
-  new (ac) std::atomic<uint64_t>(0);
+  new (ac) cuda::atomic<uint64_t>(0);
   // Store it in a shared_ptr.
   auto dtor = [](void* ptr) {
     static_cast<cuda::atomic<uint64_t>*>(ptr)->~atomic<uint64_t>();
@@ -57,12 +57,6 @@ void Event::wait() {
   nvtx3::scoped_range r("Event::wait");
   auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
   event_wait(ac, value());
-}
-
-void Event::signal() {
-  nvtx3::scoped_range r("Event::signal");
-  auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
-  event_signal(ac, value());
 }
 
 void Event::wait(Stream stream) {
@@ -81,7 +75,10 @@ void Event::wait(Stream stream) {
 void Event::signal(Stream stream) {
   nvtx3::scoped_range r("Event::signal(stream)");
   if (stream.device == Device::cpu) {
-    scheduler::enqueue(stream, [this]() mutable { signal(); });
+    scheduler::enqueue(stream, [this]() mutable {
+      auto* ac = static_cast<cuda::atomic<uint64_t>*>(event_.get());
+      event_signal(ac, value());
+    });
   } else {
     mxcuda::get_command_encoder(stream).launch_kernel_sequencially(
         [this](cudaStream_t s) {
