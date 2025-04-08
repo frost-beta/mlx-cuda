@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/common/reduce.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernels/reduce_ops.cuh"
 #include "mlx/backend/metal/copy.h"
@@ -68,7 +69,10 @@ void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
   // Get required size for temporary storage and allocate it.
   size_t size;
   CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(nullptr, size, args...));
-  array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
+  array temp(
+      mxcuda::allocator().malloc_device(size, encoder.device()),
+      {static_cast<int>(size)},
+      uint8);
   encoder.add_temporary(temp);
   // Actually run reduce.
   CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(temp.data<void>(), size, args...));
