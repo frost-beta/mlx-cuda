@@ -14,6 +14,7 @@ using allocator::Buffer;
 struct CudaBuffer {
   void* data;
   size_t size;
+  int cuda_device;
 };
 
 class CudaAllocator : public allocator::Allocator {

@@ -1,6 +1,7 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
+#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/utils.h"
 #include "mlx/backend/metal/metal.h"
 
@@ -94,14 +95,19 @@ CommandEncoder::CommandEncoder(DeviceStream& stream)
     : device_(stream.device()), stream_(stream) {}
 
 void CommandEncoder::prefetch_memory(const array& arr) {
-  // TODO: Profile whether prefetching the whole buffer would be faster.
-  const void* data = arr.data<void>();
-  size_t size = arr.data_size() * arr.itemsize();
-  if (data && size > 0) {
-    // TODO: Use a stream that maximizes parallelism.
-    CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
-        data, size, device_.cuda_device(), stream_.last_cuda_stream()));
+  auto* buffer = const_cast<CudaBuffer*>(
+      static_cast<const CudaBuffer*>(arr.buffer().ptr()));
+  if (buffer->data == nullptr || buffer->size == 0 ||
+      buffer->cuda_device == device_.cuda_device()) {
+    return;
   }
+  // TODO: Use a stream that maximizes parallelism.
+  CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
+      buffer->data,
+      buffer->size,
+      device_.cuda_device(),
+      stream_.last_cuda_stream()));
+  buffer->cuda_device = device_.cuda_device();
 }
 
 Device& device(mlx::core::Device device) {

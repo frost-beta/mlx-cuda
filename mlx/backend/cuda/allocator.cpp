@@ -10,6 +10,13 @@ namespace mlx::core {
 
 namespace mxcuda {
 
+namespace {
+
+// In cuda -1 means cpu device, we use -2 to indicate undefined state.
+constexpr int CUDA_DEVICE_UNDEFINED = -2;
+
+} // namespace
+
 CudaAllocator::CudaAllocator() {
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
@@ -18,7 +25,7 @@ CudaAllocator::CudaAllocator() {
 
 Buffer CudaAllocator::malloc(size_t size) {
   // TODO: Check memory limit.
-  auto* buf = new CudaBuffer{nullptr, size};
+  auto* buf = new CudaBuffer{nullptr, size, CUDA_DEVICE_UNDEFINED};
   cudaError_t err = cudaMallocManaged(&buf->data, size);
   if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
     throw std::runtime_error(
