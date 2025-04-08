@@ -129,14 +129,15 @@ struct EventImpl {
     return cuda || shared;
   }
 
-  void ensure_created(uint64_t signal_value) {
-    if (!shared && !cuda) {
-      if (signal_value > 1) {
-        nvtx3::mark("Using slow SharedEvent");
-        shared = std::make_unique<mxcuda::SharedEvent>();
-      } else {
-        cuda = std::make_unique<mxcuda::CudaEvent>();
-      }
+  void ensure_created(Stream stream, uint64_t signal_value) {
+    if (is_created()) {
+      return;
+    }
+    if (stream.device == mlx::core::Device::cpu || signal_value > 1) {
+      nvtx3::mark("Using slow SharedEvent");
+      shared = std::make_unique<mxcuda::SharedEvent>();
+    } else {
+      cuda = std::make_unique<mxcuda::CudaEvent>();
     }
   }
 };
@@ -151,10 +152,11 @@ Event::Event(Stream stream) : stream_(stream) {
 void Event::wait() {
   auto* event = static_cast<EventImpl*>(event_.get());
   if (!event->is_created()) {
-    // The code calls wait() before signal(), cuda event can not be used.
+    // The code calls wait() before signal(), with cuda event it would be
+    // treated as if already signaled.
     event->shared = std::make_unique<mxcuda::SharedEvent>();
   } else {
-    event->ensure_created(value());
+    event->ensure_created(stream_, value());
   }
   if (event->shared) {
     event->shared->wait(value());
@@ -167,10 +169,11 @@ void Event::wait() {
 void Event::wait(Stream stream) {
   auto* event = static_cast<EventImpl*>(event_.get());
   if (!event->is_created()) {
-    // The code calls wait() before signal(), cuda event can not be used.
+    // The code calls wait() before signal(), with cuda event it would be
+    // treated as if already signaled.
     event->shared = std::make_unique<mxcuda::SharedEvent>();
   } else {
-    event->ensure_created(value());
+    event->ensure_created(stream, value());
   }
   if (event->shared) {
     event->shared->wait(stream, value());
@@ -182,7 +185,7 @@ void Event::wait(Stream stream) {
 
 void Event::signal(Stream stream) {
   auto* event = static_cast<EventImpl*>(event_.get());
-  event->ensure_created(value());
+  event->ensure_created(stream, value());
   if (event->shared) {
     event->shared->signal(stream, value());
   } else {
