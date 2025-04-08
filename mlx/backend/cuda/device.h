@@ -92,14 +92,10 @@ class CommandEncoder {
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
-  void set_input_array(const Arrays&... arrays) {
-    (prefetch_memory(arrays), ...);
-  }
+  void set_input_array(const Arrays&... arrays) {}
 
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
-  void set_output_array(const Arrays&... arrays) {
-    (prefetch_memory(arrays), ...);
-  }
+  void set_output_array(const Arrays&... arrays) {}
 
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
   void add_temporary(Arrays&&... arrays) {
@@ -145,8 +141,6 @@ class CommandEncoder {
       stream_.add_cleanup([temporaries = std::move(temporaries_)]() {});
     }
   }
-
-  void prefetch_memory(const array& arr);
 
   Device& device_;
   DeviceStream& stream_;

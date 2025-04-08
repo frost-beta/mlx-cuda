@@ -111,22 +111,6 @@ DeviceStream& Device::get_stream(Stream stream) {
 CommandEncoder::CommandEncoder(DeviceStream& stream)
     : device_(stream.device()), stream_(stream) {}
 
-void CommandEncoder::prefetch_memory(const array& arr) {
-  auto* buffer = const_cast<CudaBuffer*>(
-      static_cast<const CudaBuffer*>(arr.buffer().ptr()));
-  if (buffer->data == nullptr || buffer->size == 0 ||
-      buffer->cuda_device == device_.cuda_device()) {
-    return;
-  }
-  // TODO: Use a stream that maximizes parallelism.
-  CHECK_CUDA_ERROR(cudaMemPrefetchAsync(
-      buffer->data,
-      buffer->size,
-      device_.cuda_device(),
-      stream_.last_cuda_stream()));
-  buffer->cuda_device = device_.cuda_device();
-}
-
 Device& device(mlx::core::Device device) {
   static std::unordered_map<int, Device> devices;
   auto it = devices.find(device.index);
