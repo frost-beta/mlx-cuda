@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/metal.h"
 
 #include <fmt/format.h>
+#include <nvtx3/nvtx3.hpp>
 
 namespace mlx::core {
 
@@ -45,6 +46,23 @@ void DeviceStream::add_host_callback(std::function<void()> func) {
         delete func;
       },
       new std::function<void()>(std::move(func))));
+}
+
+void DeviceStream::add_cleanup(std::function<void()> func) {
+  cleanups_.push_back(std::move(func));
+}
+
+void DeviceStream::finalize() {
+  if (cleanups_.empty()) {
+    return;
+  }
+  add_host_callback([cleanups = std::move(cleanups_)]() {
+    // TODO: This callback runs in device thread, is it fine?
+    nvtx3::scoped_range r("DeviceStream::finalize");
+    for (auto& func : cleanups) {
+      func();
+    }
+  });
 }
 
 CommandEncoder& DeviceStream::get_encoder() {

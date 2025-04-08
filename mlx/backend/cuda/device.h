@@ -37,6 +37,12 @@ class DeviceStream {
   // Run the function in host after last launched work finishes.
   void add_host_callback(std::function<void()> func);
 
+  // Push a function that will run after current eval ends.
+  void add_cleanup(std::function<void()> func);
+
+  // Run the cleanup callbacks after current tasks end.
+  void finalize();
+
   CommandEncoder& get_encoder();
 
   Device& device() {
@@ -47,6 +53,7 @@ class DeviceStream {
   Device& device_;
   cudaStream_t stream_;
   std::unique_ptr<CommandEncoder> encoder_;
+  std::vector<std::function<void()>> cleanups_;
 };
 
 class Device {
@@ -134,7 +141,7 @@ class CommandEncoder {
     fun(stream);
     check_cuda_error("kernel launch", cudaGetLastError());
     if (!temporaries_.empty()) {
-      stream_.add_host_callback([temporaries = std::move(temporaries_)]() {});
+      stream_.add_cleanup([temporaries = std::move(temporaries_)]() {});
     }
   }
 

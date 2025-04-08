@@ -51,13 +51,14 @@ void eval(array& arr) {
   });
 }
 
-void finalize(Stream) {
-  // CUDA kernels are launched immediately so there is nothing to do.
+void finalize(Stream stream) {
+  nvtx3::scoped_range r("finalize");
+  mxcuda::get_stream(stream).finalize();
 }
 
 void synchronize(Stream stream) {
   nvtx3::scoped_range r("synchronize");
-  mxcuda::device(stream.device).get_stream(stream).synchronize();
+  mxcuda::get_stream(stream).synchronize();
 }
 
 } // namespace mlx::core::metal
