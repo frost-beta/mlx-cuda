@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cuda_runtime.h>
 #include <cuda/atomic>
 
 namespace mlx::core::mxcuda {
@@ -15,16 +16,32 @@ class SharedEvent {
 
   SharedEvent();
 
-  SharedEvent(const SharedEvent&) = delete;
-  SharedEvent& operator=(const SharedEvent&) = delete;
-
   void wait(uint64_t value);
   void wait(Stream stream, uint64_t value);
+  void signal(uint64_t value);
   void signal(Stream stream, uint64_t value);
   bool is_signaled(uint64_t value) const;
 
  private:
   std::shared_ptr<Atomic> ac_;
+};
+
+// Wrapper of CUDA events.
+class CudaEvent {
+ public:
+  CudaEvent();
+  ~CudaEvent();
+
+  CudaEvent(const CudaEvent&) = delete;
+  CudaEvent& operator=(const CudaEvent&) = delete;
+
+  void wait();
+  void wait(Stream stream);
+  void record(Stream stream);
+  bool completed() const;
+
+ private:
+  cudaEvent_t event_;
 };
 
 } // namespace mlx::core::mxcuda
