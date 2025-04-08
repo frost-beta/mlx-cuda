@@ -8,8 +8,6 @@
 
 namespace mlx::core::mxcuda {
 
-class Device;
-
 using allocator::Buffer;
 
 // Stores cuda-managed memory.
@@ -21,9 +19,6 @@ struct CudaBuffer {
 
 class CudaAllocator : public allocator::Allocator {
  public:
-  // Allocate device buffer, used by temporaries that never read by host.
-  Buffer malloc_device(size_t size, Device& device);
-
   Buffer malloc(size_t size) override;
   void free(Buffer buffer) override;
   size_t size(Buffer buffer) const override;

@@ -2,7 +2,6 @@
 
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/cuda/allocator.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/dtype_utils.cuh"
 #include "mlx/backend/metal/copy.h"
@@ -346,7 +345,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   array workspace(
-      mxcuda::allocator().malloc_device(workspace_size, encoder.device()),
+      allocator::malloc(workspace_size),
       {static_cast<int>(workspace_size)},
       uint8);
   encoder.add_temporary(workspace);

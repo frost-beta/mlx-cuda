@@ -1,7 +1,6 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/allocator.h"
-#include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/utils.h"
 
 #include <cuda_runtime.h>
@@ -22,20 +21,6 @@ CudaAllocator::CudaAllocator() {
   size_t free, total;
   CHECK_CUDA_ERROR(cudaMemGetInfo(&free, &total));
   memory_limit_ = total * 0.8;
-}
-
-Buffer CudaAllocator::malloc_device(size_t size, Device& device) {
-  // TODO: Check memory limit.
-  auto* buf = new CudaBuffer{nullptr, size, device.cuda_device()};
-  device.make_current();
-  cudaError_t err = cudaMalloc(&buf->data, size);
-  if (err != cudaSuccess && err != cudaErrorMemoryAllocation) {
-    throw std::runtime_error(
-        fmt::format("cudaMalloc failed: {}", cudaGetErrorString(err)));
-  }
-  active_memory_ += size;
-  peak_memory_ = std::max(active_memory_, peak_memory_);
-  return Buffer{buf};
 }
 
 Buffer CudaAllocator::malloc(size_t size) {
