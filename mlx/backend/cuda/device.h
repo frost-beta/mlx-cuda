@@ -34,9 +34,6 @@ class DeviceStream {
   // Return the last stream used.
   cudaStream_t last_cuda_stream();
 
-  // Run the function in host after last launched work finishes.
-  void add_host_callback(std::function<void()> func);
-
   // Push a function that will run after current eval ends.
   void add_cleanup(std::function<void()> func);
 
@@ -50,6 +47,10 @@ class DeviceStream {
   }
 
  private:
+  // Run the function in host after last launched work finishes. This call adds
+  // at least 20µs latency in cuda stream, so only use it when necessary.
+  void add_host_callback(std::function<void()> func);
+
   Device& device_;
   cudaStream_t stream_;
   std::unique_ptr<CommandEncoder> encoder_;

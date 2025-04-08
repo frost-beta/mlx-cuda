@@ -45,10 +45,7 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
-  scheduler::notify_new_task(s);
-  d.get_stream(s).add_host_callback([s, buffers = std::move(buffers)] {
-    scheduler::notify_task_completion(s);
-  });
+  d.get_stream(s).add_cleanup([s, buffers = std::move(buffers)] {});
 }
 
 void finalize(Stream stream) {
