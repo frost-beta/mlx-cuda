@@ -37,20 +37,12 @@ cudaStream_t DeviceStream::last_cuda_stream() {
   return stream_;
 }
 
-void DeviceStream::add_cleanup(std::function<void()> func) {
-  cleanups_.push_back(std::move(func));
-}
-
 void DeviceStream::finalize() {
-  if (cleanups_.empty()) {
-    return;
+  if (!retained_.empty()) {
+    add_host_callback([retained = std::move(retained_)]() {
+      nvtx3::mark("mxcuda::DeviceStream::finalize");
+    });
   }
-  add_host_callback([cleanups = std::move(cleanups_)]() {
-    nvtx3::scoped_range r("DeviceStream::finalize");
-    for (auto& func : cleanups) {
-      func();
-    }
-  });
 }
 
 CommandEncoder& DeviceStream::get_encoder() {

@@ -45,7 +45,7 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
-  d.get_stream(s).add_cleanup([s, buffers = std::move(buffers)] {});
+  d.get_stream(s).retain_until_completion(std::move(buffers));
 }
 
 void finalize(Stream stream) {

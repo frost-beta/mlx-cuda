@@ -34,10 +34,21 @@ class DeviceStream {
   // Return the last stream used.
   cudaStream_t last_cuda_stream();
 
-  // Push a function that will run after current eval ends.
-  void add_cleanup(std::function<void()> func);
+  // Keep the buffers alive until at least current tasks are finished.
+  template <typename Container>
+  void retain_until_completion(Container&& buffers) {
+    for (auto& buf : buffers) {
+      retained_.push_back(std::move(buf));
+    }
+    // TODO: We don't want to retain the buffers for too long, which increases
+    // memory usage, and we don't want to release them too soon, which delays
+    // the kernel execution. Find a strategy that balances performance.
+    if (retained_.size() > 8) {
+      finalize();
+    }
+  }
 
-  // Run the cleanup callbacks after current tasks end.
+  // Clear the retained arrays when current tasks are finished.
   void finalize();
 
   CommandEncoder& get_encoder();
@@ -54,7 +65,7 @@ class DeviceStream {
   Device& device_;
   cudaStream_t stream_;
   std::unique_ptr<CommandEncoder> encoder_;
-  std::vector<std::function<void()>> cleanups_;
+  std::vector<std::shared_ptr<array::Data>> retained_;
 };
 
 class Device {
@@ -99,7 +110,7 @@ class CommandEncoder {
 
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
   void add_temporary(Arrays&&... arrays) {
-    (temporaries_.push_back(std::forward<Arrays>(arrays)), ...);
+    (temporaries_.push_back(arrays.data_shared_ptr()), ...);
   }
 
   template <typename F>
@@ -138,13 +149,13 @@ class CommandEncoder {
     fun(stream);
     check_cuda_error("kernel launch", cudaGetLastError());
     if (!temporaries_.empty()) {
-      stream_.add_cleanup([temporaries = std::move(temporaries_)]() {});
+      stream_.retain_until_completion(std::move(temporaries_));
     }
   }
 
   Device& device_;
   DeviceStream& stream_;
-  std::vector<array> temporaries_;
+  std::vector<std::shared_ptr<array::Data>> temporaries_;
 };
 
 Device& device(mlx::core::Device device);
