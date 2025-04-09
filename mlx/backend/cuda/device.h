@@ -36,10 +36,8 @@ class DeviceStream {
 
   // Keep the buffers alive until at least current tasks are finished.
   template <typename Container>
-  void retain_until_completion(Container&& buffers) {
-    for (auto& buf : buffers) {
-      retained_.push_back(std::move(buf));
-    }
+  void retain_until_completion(Container buffers) {
+    std::move(buffers.begin(), buffers.end(), std::back_inserter(retained_));
     // TODO: We don't want to retain the buffers for too long, which increases
     // memory usage, and we don't want to release them too soon, which delays
     // the kernel execution. Find a strategy that balances performance.
