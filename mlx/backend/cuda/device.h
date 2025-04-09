@@ -41,7 +41,7 @@ class DeviceStream {
     // TODO: We don't want to retain the buffers for too long, which increases
     // memory usage, and we don't want to release them too soon, which delays
     // the kernel execution. Find a strategy that balances performance.
-    if (retained_.size() > 8) {
+    if (retained_.size() > 32) {
       finalize();
     }
   }

@@ -73,7 +73,6 @@ Device::Device(int device) : device_(device) {
         device_));
   }
   // The cublasLt handle is used for matmul.
-  // TODO: Allocate a workspace buffer for cublas.
   make_current();
   cublasLtCreate(&lt_);
 }
