@@ -1,16 +1,17 @@
 // Copyright © 2025 Apple Inc.
 
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/cuda/device.h"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/backend/metal/copy.h"
-#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/dtype_utils.h"
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 
 #include <assert.h>
 #include <nvtx3/nvtx3.hpp>
 #include <cub/device/device_segmented_sort.cuh>
+
+#include <numeric>
 
 namespace mlx::core {
 
@@ -23,6 +24,29 @@ struct OffsetIterator {
     return stride * (begin + i);
   }
 };
+
+// We can not use any op in eval, make an utility.
+array swapaxes_in_eval(const array& in, int axis1, int axis2) {
+  std::vector<int> axes(in.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
+  std::swap(axes[axis1], axes[axis2]);
+  // TODO: Share the code with Transpose::eval.
+  Shape shape(axes.size());
+  Strides strides(in.ndim());
+  for (size_t ax = 0; ax < axes.size(); ++ax) {
+    shape[ax] = in.shape()[axes[ax]];
+    strides[ax] = in.strides()[axes[ax]];
+  }
+  auto flags = in.flags();
+  if (flags.contiguous) {
+    auto [_, row_contiguous, col_contiguous] = check_contiguity(shape, strides);
+    flags.row_contiguous = row_contiguous;
+    flags.col_contiguous = col_contiguous;
+  }
+  array out(shape, in.dtype(), nullptr, {});
+  out.copy_shared_buffer(in, strides, flags, in.data_size());
+  return out;
+}
 
 template <typename... Args>
 void segmented_sort(mxcuda::CommandEncoder& encoder, Args&&... args) {
@@ -58,8 +82,7 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out_) {
   // transpose and make a copy.
   bool is_segmented_sort = in.flags().contiguous && in.strides()[axis] == 1;
   if (!is_segmented_sort) {
-    array trans = swapaxes(in, axis, -1, s);
-    metal::eval(trans);
+    array trans = swapaxes_in_eval(in, axis, in.ndim() - 1);
     in = array(trans.shape(), trans.dtype(), nullptr, {});
     copy_gpu(trans, in, CopyType::General, s);
     encoder.add_temporary(in);
@@ -92,9 +115,7 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out_) {
   if (!is_segmented_sort) {
     // Swap the sorted axis back.
     // TODO: Do in-place transpose instead of using a temporary out array.
-    array trans = swapaxes(out, axis, -1);
-    metal::eval(trans);
-    copy_gpu(trans, out_, CopyType::General, s);
+    copy_gpu(swapaxes_in_eval(out, axis, -1), out_, CopyType::General, s);
   }
 }
 
