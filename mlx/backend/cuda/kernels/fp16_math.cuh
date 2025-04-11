@@ -215,32 +215,36 @@ MLX_DEFINE_BF16_CMP(<=)
 // Additional C++ operator overrides between half types and native types.
 ///////////////////////////////////////////////////////////////////////////////
 
-#define MLX_DEFINE_HALF_OP(HALF, HALF2FLOAT, FLOAT2HALF, OP)             \
-  template <                                                             \
-      typename T,                                                        \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
-  __forceinline__ __device__ HALF operator OP(HALF x, T y) {             \
-    return FLOAT2HALF(HALF2FLOAT(x) OP static_cast<float>(y));           \
-  }                                                                      \
-  template <                                                             \
-      typename T,                                                        \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
-  __forceinline__ __device__ HALF operator OP(T x, HALF y) {             \
-    return FLOAT2HALF(static_cast<float>(x) OP HALF2FLOAT(y));           \
+template <typename T, typename U>
+constexpr bool is_arithmetic_except =
+    cuda::std::is_arithmetic_v<T> && !cuda::std::is_same_v<T, U>;
+
+#define MLX_DEFINE_HALF_OP(HALF, HALF2FLOAT, FLOAT2HALF, OP)            \
+  template <                                                            \
+      typename T,                                                       \
+      typename = cuda::std::enable_if_t<is_arithmetic_except<T, HALF>>> \
+  __forceinline__ __device__ HALF operator OP(HALF x, T y) {            \
+    return FLOAT2HALF(HALF2FLOAT(x) OP static_cast<float>(y));          \
+  }                                                                     \
+  template <                                                            \
+      typename T,                                                       \
+      typename = cuda::std::enable_if_t<is_arithmetic_except<T, HALF>>> \
+  __forceinline__ __device__ HALF operator OP(T x, HALF y) {            \
+    return FLOAT2HALF(static_cast<float>(x) OP HALF2FLOAT(y));          \
   }
 
-#define MLX_DEFINE_HALF_CMP(HALF, HALF2FLOAT, OP)                        \
-  template <                                                             \
-      typename T,                                                        \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
-  __forceinline__ __device__ bool operator OP(HALF x, T y) {             \
-    return HALF2FLOAT(x) OP static_cast<float>(y);                       \
-  }                                                                      \
-  template <                                                             \
-      typename T,                                                        \
-      typename = cuda::std::enable_if_t<!cuda::std::is_same_v<T, HALF>>> \
-  __forceinline__ __device__ bool operator OP(T x, HALF y) {             \
-    return static_cast<float>(y) OP HALF2FLOAT(x);                       \
+#define MLX_DEFINE_HALF_CMP(HALF, HALF2FLOAT, OP)                       \
+  template <                                                            \
+      typename T,                                                       \
+      typename = cuda::std::enable_if_t<is_arithmetic_except<T, HALF>>> \
+  __forceinline__ __device__ bool operator OP(HALF x, T y) {            \
+    return HALF2FLOAT(x) OP static_cast<float>(y);                      \
+  }                                                                     \
+  template <                                                            \
+      typename T,                                                       \
+      typename = cuda::std::enable_if_t<is_arithmetic_except<T, HALF>>> \
+  __forceinline__ __device__ bool operator OP(T x, HALF y) {            \
+    return static_cast<float>(y) OP HALF2FLOAT(x);                      \
   }
 
 MLX_DEFINE_HALF_OP(__half, __half2float, __float2half, +)
