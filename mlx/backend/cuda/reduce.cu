@@ -65,12 +65,12 @@ struct CastOp {
 
 template <typename... Args>
 void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
-  // Get required size for temporary storage and allocate it.
+  // Allocate temporary storage.
   size_t size;
   CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(nullptr, size, args...));
   array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
   encoder.add_temporary(temp);
-  // Actually run reduce.
+  // Run op.
   CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(temp.data<void>(), size, args...));
 }
 

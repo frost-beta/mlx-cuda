@@ -1,29 +1,35 @@
 // Copyright © 2025 Apple Inc.
 
 #include "mlx/backend/cuda/device.h"
-#include "mlx/backend/cuda/kernels/iterators/strided_iterator.cuh"
 #include "mlx/backend/cuda/kernels/utils.cuh"
 #include "mlx/dtype_utils.h"
 #include "mlx/primitives.h"
 
 #include <assert.h>
 #include <nvtx3/nvtx3.hpp>
-#include <thrust/iterator/counting_iterator.h>
 #include <cub/device/device_segmented_sort.cuh>
 
 namespace mlx::core {
 
 namespace {
 
+struct OffsetIterator {
+  int stride;
+  int begin;
+  __device__ int operator[](int i) const {
+    return stride * (begin + i);
+  }
+};
+
 template <typename... Args>
 void segmented_sort(mxcuda::CommandEncoder& encoder, Args&&... args) {
-  // Get required size for temporary storage and allocate it.
+  // Allocate temporary storage.
   size_t size;
   CHECK_CUDA_ERROR(
       cub::DeviceSegmentedSort::StableSortKeys(nullptr, size, args...));
   array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
   encoder.add_temporary(temp);
-  // Actually run.
+  // Run op.
   CHECK_CUDA_ERROR(cub::DeviceSegmentedSort::StableSortKeys(
       temp.data<void>(), size, args...));
 }
@@ -55,16 +61,14 @@ void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
       if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
         using Type = cuda_type_t<CTYPE>;
-        auto offset = mxcuda::make_strided_iterator(
-            thrust::make_counting_iterator(0), nsort);
         segmented_sort(
             encoder,
             in.data<Type>(),
             out.data<Type>(),
             in.data_size(),
             nsegments,
-            offset,
-            offset + nsegments,
+            OffsetIterator{nsort, 0},
+            OffsetIterator{nsort, 1},
             stream);
       } else {
         throw std::runtime_error(
