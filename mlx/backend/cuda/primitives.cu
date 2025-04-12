@@ -347,7 +347,6 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 NO_GPU(AddMM)
 NO_GPU(ArgPartition)
-NO_GPU(ArgSort)
 NO_GPU(BlockMaskedMM)
 NO_GPU_MULTI(Compiled)
 NO_GPU(Concatenate)
