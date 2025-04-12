@@ -84,40 +84,18 @@ void segmented_sort(mxcuda::CommandEncoder& encoder, Args&&... args) {
       temp.data<void>(), size, args...));
 }
 
-} // namespace
-
-void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out_) {
-  nvtx3::scoped_range r("ArgSort::eval_gpu");
-  assert(inputs.size() == 1);
-  array in = inputs[0];
+void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
   array out = out_;
-
-  auto& s = stream();
   auto& encoder = mxcuda::get_command_encoder(s);
-
   encoder.set_input_array(in);
-  encoder.set_output_array(out_);
+  encoder.set_output_array(out);
 
-  int last_dim = in.ndim() - 1;
-  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
+  if (axis < 0) {
+    axis += in.ndim();
+  }
   int nsort = in.shape(axis);
   int nsegments = in.data_size() / nsort;
-
-  // Indices in the sorted dimension.
-  array indices(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
-  encoder.launch_thrust([&](auto policy) {
-    thrust::transform(
-        policy,
-        thrust::counting_iterator<uint32_t>(0),
-        thrust::counting_iterator<uint32_t>(indices.data_size()),
-        thrust::device_pointer_cast(indices.data<uint32_t>()),
-        ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
-  });
-  encoder.add_temporary(indices);
-
-  // In argsort though we don't need the result of sorted values, the API
-  // requires us to provide an array to store it.
-  array discard(allocator::malloc(in.nbytes()), in.shape(), in.dtype());
+  int last_dim = in.ndim() - 1;
 
   // If we are not sorting the innermost dimension of a contiguous array,
   // transpose and make a copy.
@@ -137,20 +115,48 @@ void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out_) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
       if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
         using Type = cuda_type_t<CTYPE>;
-        segmented_sort_pairs(
-            encoder,
-            in.data<Type>(),
-            discard.data<Type>(),
-            indices.data<uint32_t>(),
-            out.data<uint32_t>(),
-            in.data_size(),
-            nsegments,
-            OffsetIterator{nsort, 0},
-            OffsetIterator{nsort, 1},
-            stream);
+        if (argsort) {
+          // Indices in the sorted dimension.
+          array indices(
+              allocator::malloc(out.nbytes()), in.shape(), out.dtype());
+          encoder.add_temporary(indices);
+          thrust::transform(
+              thrust::cuda::par_nosync.on(stream),
+              thrust::counting_iterator<uint32_t>(0),
+              thrust::counting_iterator<uint32_t>(indices.data_size()),
+              thrust::device_pointer_cast(indices.data<uint32_t>()),
+              ModOp<uint32_t>{static_cast<uint32_t>(nsort)});
+
+          // In argsort though we don't need the result of sorted values, the
+          // API requires us to provide an array to store it.
+          array discard(allocator::malloc(in.nbytes()), in.shape(), in.dtype());
+          encoder.add_temporary(discard);
+
+          segmented_sort_pairs(
+              encoder,
+              in.data<Type>(),
+              discard.data<Type>(),
+              indices.data<uint32_t>(),
+              out.data<uint32_t>(),
+              in.data_size(),
+              nsegments,
+              OffsetIterator{nsort, 0},
+              OffsetIterator{nsort, 1},
+              stream);
+        } else {
+          segmented_sort(
+              encoder,
+              in.data<Type>(),
+              out.data<Type>(),
+              in.data_size(),
+              nsegments,
+              OffsetIterator{nsort, 0},
+              OffsetIterator{nsort, 1},
+              stream);
+        }
       } else {
         throw std::runtime_error(
-            "sort does not support complex numbers in CUDA backend");
+            "CUDA backend does not support sorting complex numbers");
       }
     });
   });
@@ -162,61 +168,18 @@ void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out_) {
   }
 }
 
-void Sort::eval_gpu(const std::vector<array>& inputs, array& out_) {
+} // namespace
+
+void ArgSort::eval_gpu(const std::vector<array>& inputs, array& out) {
+  nvtx3::scoped_range r("ArgSort::eval_gpu");
+  assert(inputs.size() == 1);
+  gpu_sort(stream(), inputs[0], out, axis_, true);
+}
+
+void Sort::eval_gpu(const std::vector<array>& inputs, array& out) {
   nvtx3::scoped_range r("Sort::eval_gpu");
   assert(inputs.size() == 1);
-  array in = inputs[0];
-  array out = out_;
-
-  auto& s = stream();
-  auto& encoder = mxcuda::get_command_encoder(s);
-  encoder.set_input_array(in);
-  encoder.set_output_array(out_);
-
-  int last_dim = in.ndim() - 1;
-  int axis = axis_ < 0 ? axis_ + in.ndim() : axis_;
-  int nsort = in.shape(axis);
-  int nsegments = in.data_size() / nsort;
-
-  // If we are not sorting the innermost dimension of a contiguous array,
-  // transpose and make a copy.
-  bool is_segmented_sort = in.flags().contiguous && in.strides()[axis] == 1;
-  if (!is_segmented_sort) {
-    array trans = swapaxes_in_eval(in, axis, last_dim);
-    in = array(trans.shape(), trans.dtype(), nullptr, {});
-    copy_gpu(trans, in, CopyType::General, s);
-    encoder.add_temporary(in);
-    out = array(allocator::malloc(out.nbytes()), in.shape(), out.dtype());
-    encoder.add_temporary(out);
-  } else {
-    out.set_data(allocator::malloc(out.nbytes()));
-  }
-
-  encoder.launch_kernel([&](cudaStream_t stream) {
-    MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
-      if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
-        using Type = cuda_type_t<CTYPE>;
-        segmented_sort(
-            encoder,
-            in.data<Type>(),
-            out.data<Type>(),
-            in.data_size(),
-            nsegments,
-            OffsetIterator{nsort, 0},
-            OffsetIterator{nsort, 1},
-            stream);
-      } else {
-        throw std::runtime_error(
-            "sort does not support complex numbers in CUDA backend");
-      }
-    });
-  });
-
-  if (!is_segmented_sort) {
-    // Swap the sorted axis back.
-    // TODO: Do in-place transpose instead of using a temporary out array.
-    copy_gpu(swapaxes_in_eval(out, axis, last_dim), out_, CopyType::General, s);
-  }
+  gpu_sort(stream(), inputs[0], out, axis_, false);
 }
 
 } // namespace mlx::core
