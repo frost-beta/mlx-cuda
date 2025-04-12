@@ -36,12 +36,13 @@ void copy_gpu_inplace(
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
       MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         using InType = cuda_type_t<CTYPE_IN>;
         using OutType = cuda_type_t<CTYPE_OUT>;
         if constexpr (std::is_convertible_v<InType, OutType>) {
+          auto policy = mxcuda::thrust_policy(stream);
           auto in_ptr =
               thrust::device_pointer_cast(in.data<InType>() + inp_offset);
           auto out_ptr =
@@ -102,14 +103,14 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(val);
   encoder.set_output_array(out);
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(val.dtype(), CTYPE_IN, [&]() {
       MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         using InType = cuda_type_t<CTYPE_IN>;
         using OutType = cuda_type_t<CTYPE_OUT>;
         if constexpr (std::is_convertible_v<InType, OutType>) {
           thrust::copy_n(
-              policy,
+              mxcuda::thrust_policy(stream),
               mxcuda::make_repeat_iterator(
                   thrust::device_pointer_cast(val.data<InType>())),
               out.data_size(),

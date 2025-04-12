@@ -121,7 +121,7 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               allocator::malloc(out.nbytes()), in.shape(), out.dtype());
           encoder.add_temporary(indices);
           thrust::transform(
-              thrust::cuda::par_nosync.on(stream),
+              mxcuda::thrust_policy(stream),
               thrust::counting_iterator<uint32_t>(0),
               thrust::counting_iterator<uint32_t>(indices.data_size()),
               thrust::device_pointer_cast(indices.data<uint32_t>()),

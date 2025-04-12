@@ -12,7 +12,7 @@ namespace mlx::core {
 
 namespace mxcuda {
 
-DeviceStream::DeviceStream(Device& device, Stream stream) : device_(device) {
+DeviceStream::DeviceStream(Device& device, Stream s) : device_(device) {
   device_.make_current();
   CHECK_CUDA_ERROR(cudaStreamCreate(&stream_));
 }
@@ -91,16 +91,22 @@ void Device::make_current() {
   }
 }
 
-DeviceStream& Device::get_stream(Stream stream) {
-  auto it = streams_.find(stream.index);
+DeviceStream& Device::get_stream(Stream s) {
+  auto it = streams_.find(s.index);
   if (it == streams_.end()) {
-    it = streams_.try_emplace(stream.index, *this, stream).first;
+    it = streams_.try_emplace(s.index, *this, s).first;
   }
   return it->second;
 }
 
-CommandEncoder::CommandEncoder(DeviceStream& stream)
-    : device_(stream.device()), stream_(stream) {}
+CommandEncoder::CommandEncoder(DeviceStream& s)
+    : device_(s.device()), stream_(s) {}
+
+void CommandEncoder::end_eval() {
+  if (!temporaries_.empty()) {
+    stream_.retain_until_completion(std::move(temporaries_));
+  }
+}
 
 Device& device(mlx::core::Device device) {
   static std::unordered_map<int, Device> devices;
@@ -111,21 +117,21 @@ Device& device(mlx::core::Device device) {
   return it->second;
 }
 
-DeviceStream& get_stream(Stream stream) {
-  return device(stream.device).get_stream(stream);
+DeviceStream& get_stream(Stream s) {
+  return device(s.device).get_stream(s);
 }
 
-CommandEncoder& get_command_encoder(Stream stream) {
-  return get_stream(stream).get_encoder();
+CommandEncoder& get_command_encoder(Stream s) {
+  return get_stream(s).get_encoder();
 }
 
 } // namespace mxcuda
 
 namespace metal {
 
-void new_stream(Stream stream) {
+void new_stream(Stream s) {
   // Ensure the static stream objects get created.
-  mxcuda::get_command_encoder(stream);
+  mxcuda::get_command_encoder(s);
 }
 
 const std::unordered_map<std::string, std::variant<std::string, size_t>>&

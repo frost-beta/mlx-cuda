@@ -20,7 +20,6 @@ void stop_capture() {}
 void eval(array& arr) {
   nvtx3::scoped_range r("metal::eval");
   auto s = arr.primitive().stream();
-  auto& d = mxcuda::device(s.device);
 
   auto outputs = arr.outputs();
   {
@@ -45,17 +44,19 @@ void eval(array& arr) {
     buffers.erase(it);
   }
 
-  d.get_stream(s).retain_until_completion(std::move(buffers));
+  auto& stream = mxcuda::get_stream(s);
+  stream.retain_until_completion(std::move(buffers));
+  stream.get_encoder().end_eval();
 }
 
-void finalize(Stream stream) {
+void finalize(Stream s) {
   nvtx3::scoped_range r("finalize");
-  mxcuda::get_stream(stream).finalize();
+  mxcuda::get_stream(s).finalize();
 }
 
-void synchronize(Stream stream) {
+void synchronize(Stream s) {
   nvtx3::scoped_range r("synchronize");
-  mxcuda::get_stream(stream).synchronize();
+  mxcuda::get_stream(s).synchronize();
 }
 
 } // namespace mlx::core::metal

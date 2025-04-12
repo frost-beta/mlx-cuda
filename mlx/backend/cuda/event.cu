@@ -53,14 +53,16 @@ void SharedEvent::wait(uint64_t value) {
   event_wait(ac_.get(), value);
 }
 
-void SharedEvent::wait(Stream stream, uint64_t value) {
-  nvtx3::scoped_range r("mxcuda::SharedEvent::wait(stream)");
-  if (stream.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(stream, [*this, value]() mutable { wait(value); });
+void SharedEvent::wait(Stream s, uint64_t value) {
+  nvtx3::scoped_range r("mxcuda::SharedEvent::wait(s)");
+  if (s.device == mlx::core::Device::cpu) {
+    scheduler::enqueue(s, [*this, value]() mutable { wait(value); });
   } else {
-    mxcuda::get_command_encoder(stream).launch_kernel_sequencially(
-        [this, value](cudaStream_t s) {
-          event_wait_kernel<<<1, 1, 0, s>>>(ac_.get(), value);
+    auto& encoder = mxcuda::get_command_encoder(s);
+    encoder.launch_kernel(
+        encoder.stream().last_cuda_stream(),
+        [this, value](cudaStream_t stream) {
+          event_wait_kernel<<<1, 1, 0, stream>>>(ac_.get(), value);
         });
   }
 }
@@ -70,14 +72,16 @@ void SharedEvent::signal(uint64_t value) {
   event_signal(ac_.get(), value);
 }
 
-void SharedEvent::signal(Stream stream, uint64_t value) {
-  nvtx3::scoped_range r("mxcuda::SharedEvent::signal(stream)");
-  if (stream.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(stream, [*this, value]() mutable { signal(value); });
+void SharedEvent::signal(Stream s, uint64_t value) {
+  nvtx3::scoped_range r("mxcuda::SharedEvent::signal(s)");
+  if (s.device == mlx::core::Device::cpu) {
+    scheduler::enqueue(s, [*this, value]() mutable { signal(value); });
   } else {
-    mxcuda::get_command_encoder(stream).launch_kernel_sequencially(
-        [this, value](cudaStream_t s) {
-          event_signal_kernel<<<1, 1, 0, s>>>(ac_.get(), value);
+    auto& encoder = mxcuda::get_command_encoder(s);
+    encoder.launch_kernel(
+        encoder.stream().last_cuda_stream(),
+        [this, value](cudaStream_t stream) {
+          event_signal_kernel<<<1, 1, 0, stream>>>(ac_.get(), value);
         });
   }
 }
@@ -101,16 +105,16 @@ void CudaEvent::wait() {
   cudaEventSynchronize(event_);
 }
 
-void CudaEvent::wait(Stream stream) {
-  nvtx3::scoped_range r("mxcuda::CudaEvent::wait(stream)");
-  assert(stream.device != mlx::core::Device::cpu);
-  cudaStreamWaitEvent(get_stream(stream).last_cuda_stream(), event_);
+void CudaEvent::wait(Stream s) {
+  nvtx3::scoped_range r("mxcuda::CudaEvent::wait(s)");
+  assert(s.device != mlx::core::Device::cpu);
+  cudaStreamWaitEvent(get_stream(s).last_cuda_stream(), event_);
 }
 
-void CudaEvent::record(Stream stream) {
-  nvtx3::scoped_range r("mxcuda::CudaEvent::record(stream)");
-  assert(stream.device != mlx::core::Device::cpu);
-  cudaEventRecord(event_, get_stream(stream).last_cuda_stream());
+void CudaEvent::record(Stream s) {
+  nvtx3::scoped_range r("mxcuda::CudaEvent::record(s)");
+  assert(s.device != mlx::core::Device::cpu);
+  cudaEventRecord(event_, get_stream(s).last_cuda_stream());
 }
 
 bool CudaEvent::completed() const {
@@ -129,11 +133,11 @@ struct EventImpl {
     return cuda || shared;
   }
 
-  void ensure_created(Stream stream, uint64_t signal_value) {
+  void ensure_created(Stream s, uint64_t signal_value) {
     if (is_created()) {
       return;
     }
-    if (stream.device == mlx::core::Device::cpu || signal_value > 1) {
+    if (s.device == mlx::core::Device::cpu || signal_value > 1) {
       nvtx3::mark("Using slow SharedEvent");
       shared = std::make_unique<mxcuda::SharedEvent>();
     } else {
@@ -144,7 +148,7 @@ struct EventImpl {
 
 } // namespace
 
-Event::Event(Stream stream) : stream_(stream) {
+Event::Event(Stream s) : stream_(s) {
   event_ = std::shared_ptr<void>(
       new EventImpl(), [](void* ptr) { delete static_cast<EventImpl*>(ptr); });
 }
@@ -166,30 +170,30 @@ void Event::wait() {
   }
 }
 
-void Event::wait(Stream stream) {
+void Event::wait(Stream s) {
   auto* event = static_cast<EventImpl*>(event_.get());
   if (!event->is_created()) {
     // The code calls wait() before signal(), with cuda event it would be
     // treated as if already signaled.
     event->shared = std::make_unique<mxcuda::SharedEvent>();
   } else {
-    event->ensure_created(stream, value());
+    event->ensure_created(s, value());
   }
   if (event->shared) {
-    event->shared->wait(stream, value());
+    event->shared->wait(s, value());
   } else {
     assert(value() <= 1);
-    event->cuda->wait(stream);
+    event->cuda->wait(s);
   }
 }
 
-void Event::signal(Stream stream) {
+void Event::signal(Stream s) {
   auto* event = static_cast<EventImpl*>(event_.get());
-  event->ensure_created(stream, value());
+  event->ensure_created(s, value());
   if (event->shared) {
-    event->shared->signal(stream, value());
+    event->shared->signal(s, value());
   } else {
-    event->cuda->record(stream);
+    event->cuda->record(s);
   }
 }
 

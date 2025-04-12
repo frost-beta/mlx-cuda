@@ -77,12 +77,13 @@ void binary_op_gpu_inplace(
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(a, b);
   encoder.set_output_array(out);
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(a.dtype(), CTYPE_IN, [&]() {
       MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         if constexpr (is_supported_binary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
+          auto policy = mxcuda::thrust_policy(stream);
           auto a_ptr = thrust::device_pointer_cast(a.data<InType>());
           auto b_ptr = thrust::device_pointer_cast(b.data<InType>());
           auto out_begin = thrust::device_pointer_cast(out.data<OutType>());

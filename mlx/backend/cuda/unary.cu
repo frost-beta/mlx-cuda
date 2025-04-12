@@ -74,12 +74,13 @@ void unary_op_gpu_inplace(
   auto& encoder = mxcuda::get_command_encoder(s);
   encoder.set_input_array(in);
   encoder.set_output_array(out);
-  encoder.launch_thrust([&](auto policy) {
+  encoder.launch_kernel([&](cudaStream_t stream) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE_IN, [&]() {
       MLX_SWITCH_ALL_TYPES(out.dtype(), CTYPE_OUT, [&]() {
         if constexpr (is_supported_unary_op<Op, CTYPE_IN, CTYPE_OUT>()) {
           using InType = cuda_type_t<CTYPE_IN>;
           using OutType = cuda_type_t<CTYPE_OUT>;
+          auto policy = mxcuda::thrust_policy(stream);
           if (in.flags().contiguous) {
             thrust::transform(
                 policy,

@@ -19,7 +19,7 @@ class CommandEncoder;
 // A stream in MLX consists of multiple CUDA stream.
 class DeviceStream {
  public:
-  DeviceStream(Device& device, Stream stream);
+  DeviceStream(Device& device, Stream s);
   ~DeviceStream();
 
   DeviceStream(const DeviceStream&) = delete;
@@ -77,7 +77,7 @@ class Device {
   // Make this instance the current CUDA device, required by some CUDA calls.
   void make_current();
 
-  DeviceStream& get_stream(Stream stream);
+  DeviceStream& get_stream(Stream s);
 
   int cuda_device() const {
     return device_;
@@ -106,30 +106,24 @@ class CommandEncoder {
   template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
   void set_output_array(const Arrays&... arrays) {}
 
-  template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
-  void add_temporary(Arrays&&... arrays) {
-    (temporaries_.push_back(arrays.data_shared_ptr()), ...);
+  void add_temporary(const array& arr) {
+    temporaries_.push_back(arr.data_shared_ptr());
   }
 
+  // Current temporaries will no longer be used.
+  void end_eval();
+
+  // Setup everything for launching cuda kernel in |fun|.
   template <typename F>
   void launch_kernel(F&& fun) {
-    launch_kernel_with(std::forward<F>(fun), stream_.schedule_cuda_stream());
+    launch_kernel(stream_.schedule_cuda_stream(), std::forward<F>(fun));
   }
 
   template <typename F>
-  void launch_kernel_sequencially(F&& fun) {
-    launch_kernel_with(std::forward<F>(fun), stream_.last_cuda_stream());
-  }
-
-  template <typename F>
-  void launch_thrust(F&& fun) {
-    launch_kernel([&](cudaStream_t stream) {
-      // Make thrust dispatch work on stream asynchronously.
-      // TODO: If we are going to keep the thrust APIs in the end, we should
-      // use a custom allocator that works with existing buffer cache.
-      auto nosync_exec_policy = thrust::cuda::par_nosync.on(stream);
-      fun(nosync_exec_policy);
-    });
+  void launch_kernel(cudaStream_t stream, F&& fun) {
+    device_.make_current();
+    fun(stream);
+    check_cuda_error("kernel launch", cudaGetLastError());
   }
 
   Device& device() {
@@ -141,23 +135,20 @@ class CommandEncoder {
   }
 
  private:
-  template <typename F>
-  void launch_kernel_with(F&& fun, cudaStream_t stream) {
-    device_.make_current();
-    fun(stream);
-    check_cuda_error("kernel launch", cudaGetLastError());
-    if (!temporaries_.empty()) {
-      stream_.retain_until_completion(std::move(temporaries_));
-    }
-  }
-
   Device& device_;
   DeviceStream& stream_;
   std::vector<std::shared_ptr<array::Data>> temporaries_;
 };
 
 Device& device(mlx::core::Device device);
-DeviceStream& get_stream(Stream stream);
-CommandEncoder& get_command_encoder(Stream stream);
+DeviceStream& get_stream(Stream s);
+CommandEncoder& get_command_encoder(Stream s);
+
+// Return an execution policy that does not sync for result.
+// Note that not all thrust APIs support async policy, confirm before using.
+inline auto thrust_policy(cudaStream_t stream) {
+  // TODO: Connect thrust's custom allocator with mlx's allocator.
+  return thrust::cuda::par_nosync.on(stream);
+}
 
 } // namespace mlx::core::mxcuda

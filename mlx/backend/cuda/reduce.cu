@@ -94,14 +94,14 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Fill out with init value.
   if (in.size() == 0) {
-    encoder.launch_thrust([&](auto policy) {
+    encoder.launch_kernel([&](cudaStream_t stream) {
       MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
         MLX_SWITCH_REDUCE_TYPES(reduce_type_, OP, {
           if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
             using InType = cuda_type_t<CTYPE>;
             using OutType = mxcuda::ReduceResult<OP, InType>::type;
             thrust::copy_n(
-                policy,
+                mxcuda::thrust_policy(stream),
                 thrust::make_constant_iterator(
                     mxcuda::ReduceInit<OP, InType>::value),
                 out.data_size(),
