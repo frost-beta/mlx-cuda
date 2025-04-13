@@ -18,6 +18,13 @@ namespace mlx::core {
 
 namespace {
 
+template <typename T, typename U>
+struct CastOp {
+  __device__ U operator()(T x) {
+    return static_cast<U>(x);
+  }
+};
+
 #define MLX_FORALL_REDUCE_TYPES(_, ...) \
   _(And, __VA_ARGS__)                   \
   _(Or, __VA_ARGS__)                    \
@@ -56,13 +63,6 @@ constexpr bool is_supported_reduce_op() {
   }
   return true;
 }
-
-template <typename T, typename U>
-struct CastOp {
-  __device__ U operator()(T x) {
-    return static_cast<U>(x);
-  }
-};
 
 template <typename... Args>
 void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
@@ -163,7 +163,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
             auto offsets = thrust::make_transform_iterator(
                 thrust::make_counting_iterator(0),
-                [reduction_size = plan.shape[0]] __device__(int i) {
+                [reduction_size = plan.shape.back()] __device__(int i) {
                   return i * reduction_size;
                 });
             segmented_reduce(

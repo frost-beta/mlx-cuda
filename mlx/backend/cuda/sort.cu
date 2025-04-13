@@ -19,14 +19,6 @@ namespace mlx::core {
 
 namespace {
 
-struct OffsetIterator {
-  int stride;
-  int begin;
-  __device__ int operator[](int i) const {
-    return stride * (begin + i);
-  }
-};
-
 template <typename T>
 struct ModOp {
   T divisor;
@@ -115,6 +107,9 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
     MLX_SWITCH_ALL_TYPES(in.dtype(), CTYPE, [&]() {
       if constexpr (!std::is_same_v<CTYPE, complex64_t>) {
         using Type = cuda_type_t<CTYPE>;
+        auto offsets = thrust::make_transform_iterator(
+            thrust::make_counting_iterator(0),
+            [nsort] __device__(int i) { return i * nsort; });
         if (argsort) {
           // Indices in the sorted dimension.
           array indices(
@@ -140,8 +135,8 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               out.data<uint32_t>(),
               in.data_size(),
               nsegments,
-              OffsetIterator{nsort, 0},
-              OffsetIterator{nsort, 1},
+              offsets,
+              offsets + 1,
               stream);
         } else {
           segmented_sort(
@@ -150,8 +145,8 @@ void gpu_sort(const Stream& s, array in, array& out_, int axis, bool argsort) {
               out.data<Type>(),
               in.data_size(),
               nsegments,
-              OffsetIterator{nsort, 0},
-              OffsetIterator{nsort, 1},
+              offsets,
+              offsets + 1,
               stream);
         }
       } else {
