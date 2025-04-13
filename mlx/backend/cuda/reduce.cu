@@ -12,6 +12,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <cub/device/device_reduce.cuh>
+#include <cub/device/device_segmented_reduce.cuh>
 
 namespace mlx::core {
 
@@ -72,6 +73,18 @@ void all_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
   encoder.add_temporary(temp);
   // Run op.
   CHECK_CUDA_ERROR(cub::DeviceReduce::Reduce(temp.data<void>(), size, args...));
+}
+
+template <typename... Args>
+void segmented_reduce(mxcuda::CommandEncoder& encoder, Args&&... args) {
+  // Allocate temporary storage.
+  size_t size;
+  CHECK_CUDA_ERROR(cub::DeviceSegmentedReduce::Reduce(nullptr, size, args...));
+  array temp(allocator::malloc(size), {static_cast<int>(size)}, uint8);
+  encoder.add_temporary(temp);
+  // Run op.
+  CHECK_CUDA_ERROR(
+      cub::DeviceSegmentedReduce::Reduce(temp.data<void>(), size, args...));
 }
 
 } // namespace
@@ -136,31 +149,41 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
         if constexpr (is_supported_reduce_op<OP, CTYPE>()) {
           using InType = cuda_type_t<CTYPE>;
           using OutType = mxcuda::ReduceResult<OP, InType>::type;
+          auto in_iter = thrust::make_transform_iterator(
+              thrust::device_pointer_cast(in.data<InType>()),
+              CastOp<InType, OutType>());
+          auto out_ptr = thrust::device_pointer_cast(out.data<OutType>());
+          auto init = mxcuda::ReduceInit<OP, InType>::value;
           if (plan.type == ContiguousAllReduce) {
             all_reduce(
-                encoder,
-                thrust::make_transform_iterator(
-                    thrust::device_pointer_cast(in.data<InType>()),
-                    CastOp<InType, OutType>()),
-                thrust::device_pointer_cast(out.data<OutType>()),
-                in.data_size(),
-                OP(),
-                mxcuda::ReduceInit<OP, InType>::value,
-                stream);
-          } else if (
-              plan.type == ContiguousReduce ||
-              plan.type == GeneralContiguousReduce) {
-            throw std::runtime_error(
-                "Multi-axis reduce not implemented in CUDA backend.");
-          } else if (
-              plan.type == ContiguousStridedReduce ||
-              plan.type == GeneralStridedReduce) {
-            throw std::runtime_error(
-                "General reduce not implemented in CUDA backend.");
+                encoder, in_iter, out_ptr, in.data_size(), OP(), init, stream);
+            return;
           }
+
+          if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
+            auto offsets = thrust::make_transform_iterator(
+                thrust::make_counting_iterator(0),
+                [reduction_size = plan.shape[0]] __device__(int i) {
+                  return i * reduction_size;
+                });
+            segmented_reduce(
+                encoder,
+                in_iter,
+                out_ptr,
+                out.size(),
+                offsets,
+                offsets + 1,
+                OP(),
+                init,
+                stream);
+            return;
+          }
+
+          throw std::runtime_error(
+              "Unimplemented reduce layout in CUDA backend");
         } else {
           throw std::runtime_error(fmt::format(
-              "Can not do reduce op {} on dtype {}.",
+              "Can not do reduce op {} on dtype {}",
               get_reduce_op_name<OP>(),
               dtype_to_string(in.dtype())));
         }

@@ -12,9 +12,4 @@ struct Arange {
   }
 };
 
-template <typename T>
-inline Arange<T> make_arange(T start, T next) {
-  return Arange<T>{start, static_cast<T>(next - start)};
-}
-
 } // namespace mlx::core::mxcuda
