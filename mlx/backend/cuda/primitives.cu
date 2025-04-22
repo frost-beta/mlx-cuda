@@ -164,7 +164,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error(#func " has no CUDA implementation.");   \
   }
 
-NO_GPU(AddMM)
 NO_GPU(ArgPartition)
 NO_GPU(ArgSort)
 NO_GPU(BlockMaskedMM)
@@ -182,7 +181,6 @@ NO_GPU(Hadamard)
 NO_GPU(Load)
 NO_GPU(LogSumExp)
 NO_GPU_MULTI(LUF)
-NO_GPU(Matmul)
 NO_GPU(Partition)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
