@@ -14,6 +14,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/fence.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/gather.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/normalization.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cu
           ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp

@@ -194,7 +194,6 @@ NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)
 
 namespace fast {
-NO_GPU_MULTI(LayerNorm)
 NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_MULTI(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
