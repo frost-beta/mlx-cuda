@@ -155,6 +155,7 @@ constexpr const char* g_include_names[] = {
     INCLUDE_PREFIX "cucomplex_math.cuh",
     INCLUDE_PREFIX "fp16_math.cuh",
     INCLUDE_PREFIX "indexing.cuh",
+    INCLUDE_PREFIX "scatter_ops.cuh",
     INCLUDE_PREFIX "unary_ops.cuh",
     INCLUDE_PREFIX "utils.cuh",
 };
@@ -169,6 +170,7 @@ constexpr const char* g_headers[] = {
     jit_source_cucomplex_math,
     jit_source_fp16_math,
     jit_source_indexing,
+    jit_source_scatter_ops,
     jit_source_unary_ops,
     jit_source_utils,
 };
